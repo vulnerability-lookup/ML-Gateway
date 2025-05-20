@@ -1,0 +1,63 @@
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[project]
+name = "ML-Gateway"
+version = "0.1.0"
+description = "This project implements a FastAPI-based local server designed to load one or more pre-trained NLP models during startup and expose them through a clean, RESTful API for inference."
+authors = [
+    {name = "Cédric Bonhomme",email = "cedric.bonhomme@circl.lu"}
+]
+license = {text = "AGPL-3.0-or-later"}
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "fastapi (>=0.115.12,<0.116.0)",
+    "transformers (>=4.51.3,<5.0.0)",
+    "torch (>=2.7.0,<3.0.0)",
+    "uvicorn[standard] (>=0.34.2,<0.35.0)"
+]
+
+
+[project.urls]
+Homepage = "https://github.com/vulnerability-lookup/ML-Gateway"
+Repository = "https://github.com/vulnerability-lookup/ML-Gateway"
+
+
+[tool.poetry]
+requires-poetry = ">=2.0"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Security",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
+]
+packages = [
+    { include = "api" },
+]
+
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+ignore_errors = false
+ignore_missing_imports = false
+strict_optional = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unreachable = true
+
+show_error_context = true
+pretty = true
