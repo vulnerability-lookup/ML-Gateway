@@ -15,11 +15,11 @@ The ultimate goal is to enrich vulnerability data descriptions through the appli
 
 ## Installation
 
-``bash
+```bash
 git clone https://github.com/vulnerability-lookup/ML-Gateway
 cd ML-Gateway/
 poetry install
-``
+```
 
 ## Running the Server
 
