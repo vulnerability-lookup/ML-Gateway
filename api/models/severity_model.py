@@ -1,4 +1,5 @@
 from transformers import pipeline
+from transformers.pipelines.base import Pipeline
 
 """
 This module defines a model wrapper for the severity classification.
@@ -9,12 +10,12 @@ For example, pipeline("sentiment-analysis", model="...") and pipeline(text) migh
 
 class SeverityModel:
     def __init__(self, model_name: str):
-        self.model_name = model_name
-        self.pipeline = None
+        self.model_name: str = model_name
+        self.pipeline: Pipeline | None = None
 
     def load(self):
         """
-        Load the Hugging Face pipeline for classification.
+        Load the Transformers pipeline for classification.
         This should be called once at startup.
         """
         # Initialize the text-classification pipeline with the given model

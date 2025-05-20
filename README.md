@@ -21,12 +21,13 @@ cd ML-Gateway/
 poetry install
 ```
 
-## Running the Server
 
+## Running the server
 
 ```bash
 poetry run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
 
 ## API Endpoint
 
