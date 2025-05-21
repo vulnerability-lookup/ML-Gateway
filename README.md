@@ -12,6 +12,7 @@ the available endpoints, their expected input formats, and sample responses—ma
 
 The ultimate goal is to enrich vulnerability data descriptions through the application of a suite of NLP models, providing direct benefits to Vulnerability-Lookup and supporting other related projects.
 
+[![Conceptual architecture](docs/ml-gateway.png)](docs/ml-gateway.png)
 
 ## Installation
 
