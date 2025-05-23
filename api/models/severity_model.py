@@ -3,9 +3,6 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 """
 This module defines a model wrapper for the severity classification.
-We use transformers.pipeline for text classification, which returns a list of label/score dictionaries when called
-
-For example, pipeline("sentiment-analysis", model="...") and pipeline(text) might return [{ 'label': 'POSITIVE', 'score': 0.999 }]
 """
 
 # Constants
