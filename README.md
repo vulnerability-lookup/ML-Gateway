@@ -67,7 +67,7 @@ fetch("https://vulnerability.circl.lu/api/vlai/severity-classification", {
     headers: {
     "Content-Type": "application/json"
     },
-    body: JSON.stringify({ description: description.innerText })
+    body: JSON.stringify({ description: "Description of the vulnerability..." })
 })
 .then(response => response.json())
 .then(result => {
