@@ -5,7 +5,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "ML-Gateway"
-version = "0.1.0"
+version = "0.2.0"
 description = "This project implements a FastAPI-based local server designed to load one or more pre-trained NLP models during startup and expose them through a clean, RESTful API for inference."
 authors = [
     {name = "Cédric Bonhomme",email = "cedric.bonhomme@circl.lu"}

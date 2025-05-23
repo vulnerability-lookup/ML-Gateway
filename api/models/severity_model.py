@@ -1,5 +1,5 @@
-from transformers import pipeline
-from transformers.pipelines.base import Pipeline
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 """
 This module defines a model wrapper for the severity classification.
@@ -8,32 +8,33 @@ We use transformers.pipeline for text classification, which returns a list of la
 For example, pipeline("sentiment-analysis", model="...") and pipeline(text) might return [{ 'label': 'POSITIVE', 'score': 0.999 }]
 """
 
-class SeverityModel:
-    def __init__(self, model_name: str):
-        self.model_name: str = model_name
-        self.pipeline: Pipeline | None = None
+# Constants
+MODEL_NAME = "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
+LABELS = ["Low", "Medium", "High", "Critical"]
 
-    def load(self):
-        """
-        Load the Transformers pipeline for classification.
-        This should be called once at startup.
-        """
-        # Initialize the text-classification pipeline with the given model
-        self.pipeline = pipeline(
-            "text-classification",
-            model=self.model_name
+
+class SeverityClassifier:
+    def __init__(self):
+        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        self.model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+        self.model.eval()  # Disable dropout etc.
+
+    def predict(self, description: str):
+        inputs = self.tokenizer(
+            description, return_tensors="pt", truncation=True, padding=True
         )
 
-    def predict(self, text: str):
-        """
-        Run the model on the provided text.
-        Returns a list of dicts: [{'label': ..., 'score': ...}].
-        """
-        if self.pipeline is None:
-            raise ValueError("Model not loaded. Call load() first.")
-        return self.pipeline(text)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
 
-# Instantiate the SeverityModel with the desired pre-trained model
-severity_model = SeverityModel(
-    model_name="CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
-)
+        # Get top class index and confidence
+        predicted_index = torch.argmax(probabilities, dim=-1).item()
+        confidence = probabilities[0][predicted_index].item()
+        label = LABELS[predicted_index]
+
+        return {"severity": label, "confidence": round(confidence, 4)}
+
+
+# Singleton instance of the model
+severity_model = SeverityClassifier()
