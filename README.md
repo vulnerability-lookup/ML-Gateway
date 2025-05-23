@@ -37,6 +37,8 @@ poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000
 Deployment is straightforward—no configuration files or databases are required.
 Inference with the pre-trained models runs efficiently without the need for a GPU.
 
+We recommend running ML-Gateway on a separate server than Vulnerability-Lookup.
+
 
 ## API Endpoint
 
@@ -52,6 +54,34 @@ curl -X 'POST' \
 }'
 {"severity":"Critical","confidence":0.7021538019180298}
 ```
+
+
+The HTML frontend templates of Vulnerability-Lookup use asynchronous JavaScript
+calls to interact with
+[a dedicated API endpoint](https://www.vulnerability-lookup.org/documentation/api-v1.html#post--vlai-severity-classification):
+
+
+```javascript
+fetch("https://vulnerability.circl.lu/api/vlai/severity-classification", {
+    method: "POST",
+    headers: {
+    "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ description: description.innerText })
+})
+.then(response => response.json())
+.then(result => {
+    console.log(result["severity"] + " (confidence: " + formatNumberWithPrecision(result["confidence"], 4) + ")");
+})
+.catch((error) => {
+    console.error("Error:", error);
+});
+```
+
+When a request is received, the Vulnerability-Lookup backend forwards it to the ML-Gateway API.
+The ML-Gateway performs the inference, and the resulting severity classification,
+along with a confidence score,is returned and displayed to the user.
+
 
 
 ## Funding
