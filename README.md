@@ -71,7 +71,7 @@ fetch("https://vulnerability.circl.lu/api/vlai/severity-classification", {
 })
 .then(response => response.json())
 .then(result => {
-    console.log(result["severity"] + " (confidence: " + formatNumberWithPrecision(result["confidence"], 4) + ")");
+    console.log(result["severity"] + " (confidence: " + result["confidence"] + ")");
 })
 .catch((error) => {
     console.error("Error:", error);
