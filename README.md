@@ -83,6 +83,12 @@ The ML-Gateway performs the inference, and the resulting severity classification
 along with a confidence score,is returned and displayed to the user.
 
 
+## Refreshing the models
+
+```bash
+poetry run ml-gw-cli refresh-all
+```
+
 
 ## Funding
 
