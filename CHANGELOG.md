@@ -1,6 +1,12 @@
 # Changelog
 
 
+## Release 0.3.0 (2025-05-2)
+
+Added a cli with two commands in order to refresh the models from Hugging Face.
+A command to force-refresh a specific model and a command to force-refresh all preconfigured models.
+
+
 ## Release 0.2.0 (2025-05-23)
 
 Refactored ``severity_model.py`` to use a manual inference in order
