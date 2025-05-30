@@ -5,7 +5,7 @@ more pre-trained NLP models during startup and expose them through a clean,
 RESTful API for inference.
 
 For example, it leverages the Hugging Face transformers library to load the
-[CIRCL/vulnerability-severity-classification-distilbert-base-uncased model](https://huggingface.co/CIRCL/vulnerability-severity-classification-roberta-base),
+[CIRCL/vulnerability-severity-classification-RoBERTa-base](https://huggingface.co/CIRCL/vulnerability-severity-classification-roberta-base),
 which specializes in classifying vulnerability descriptions according to their severity level.
 The server initializes this model once at startup, ensuring minimal latency during inference requests.
 
