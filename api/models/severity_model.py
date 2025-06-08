@@ -6,7 +6,7 @@ This module defines a model wrapper for the severity classification.
 """
 
 # Constants
-MODEL_NAME = "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
+MODEL_NAME = "CIRCL/vulnerability-severity-classification-RoBERTa-base"
 LABELS = ["Low", "Medium", "High", "Critical"]
 
 

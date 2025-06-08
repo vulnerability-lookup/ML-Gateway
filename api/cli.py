@@ -29,7 +29,7 @@ def refresh_all():
     typer.echo("Refreshing all preconfigured models...")
 
     models = [
-        "CIRCL/vulnerability-severity-classification-distilbert-base-uncased",
+        "CIRCL/vulnerability-severity-classification-RoBERTa-base",
     ]
 
     for model_name in models:
