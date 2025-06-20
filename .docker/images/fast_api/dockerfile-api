@@ -1,0 +1,50 @@
+FROM debian:stable-slim
+ARG UID=1000
+ARG GID=1000
+
+ENV PYTHONFAULTHANDLER=1 \
+  PYTHONUNBUFFERED=1 \
+  PYTHONHASHSEED=random \
+  PIP_NO_CACHE_DIR=off \
+  PIP_DISABLE_PIP_VERSION_CHECK=on \
+  PIP_DEFAULT_TIMEOUT=100 \
+  # Poetry's configuration:
+  POETRY_NO_INTERACTION=1 \
+  POETRY_HOME='/usr/local'
+
+COPY ./.docker/files/fastapi/install.sh .
+
+RUN sed -i -e 's/\r$//' ./install.sh
+
+RUN ./install.sh
+
+RUN rm ./install.sh
+
+# System deps:
+RUN curl -sSL https://install.python-poetry.org | python3 -
+
+# create basicuser for container and use the GID/UID from the host build user (if provided)
+RUN groupadd -g $GID basicuser && useradd -r -u $UID -g basicuser basicuser
+
+RUN mkdir -p /home/basicuser && chown basicuser:basicuser -R /home/basicuser
+
+USER basicuser
+
+ENV PATH="/home/basicuser/.local/bin:${PATH}"
+
+WORKDIR /app
+# Copy the current directory contents into the container at /app
+COPY --chown=basicuser:basicuser api ./api/
+
+# Copy only requirements to cache them in docker layer and prevent reinstalling them if there are no dep changes
+COPY --chown=basicuser:basicuser poetry.lock pyproject.toml README.md ./
+
+# Project initialization:
+RUN poetry install --no-interaction --no-ansi
+
+RUN poetry run ml-gw-cli refresh-all
+
+EXPOSE 8000
+
+# run the command to start the api
+CMD ["poetry", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

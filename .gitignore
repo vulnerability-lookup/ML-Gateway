@@ -9,6 +9,7 @@ syntax: glob
 # Virtualenv
 venv
 build
+.venv
 
 # setuptools
 build/*
