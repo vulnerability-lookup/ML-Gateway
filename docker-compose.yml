@@ -1,0 +1,41 @@
+---
+name: "ml-gateway"
+
+services:
+
+  ml-gateway:
+    image: ml-gateway
+    hostname: ml-gateway
+    restart: always
+    build:
+      context: .
+      dockerfile: .docker/images/fast_api/dockerfile-api
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+    ports:
+      - "8000:8000"
+    networks:
+      - gateway
+    healthcheck:
+      test: curl --fail http://localhost:8000 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 1
+      start_period: 60s
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    hostname: autoheal
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+    networks:
+      - gateway
+
+networks:
+  gateway:

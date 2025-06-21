@@ -15,6 +15,11 @@ class SeverityRequest(BaseModel):
     description: str
 
 
+@router.get("/")
+async def root():
+    return "OK"
+
+
 @router.post("/classify/severity")
 async def severity_classification_endpoint(request: SeverityRequest):
     """
