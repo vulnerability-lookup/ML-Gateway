@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 
+from api.schemas import SeverityRequest
 from api.services.classification_service import classify_severity
 
 """
@@ -9,10 +9,6 @@ We define the request schema with Pydantic and the endpoint function:
 """
 
 router = APIRouter()
-
-
-class SeverityRequest(BaseModel):
-    description: str
 
 
 @router.get("/")
@@ -27,5 +23,4 @@ async def severity_classification_endpoint(request: SeverityRequest):
     Expects JSON: {"description": "\<text\>"}
     Returns JSON: {"severity": "\<label\>", "confidence": \<float\>}
     """
-    result = classify_severity(request.description)
-    return result
+    return classify_severity(request)

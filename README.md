@@ -42,7 +42,7 @@ We recommend running ML-Gateway on a separate server than Vulnerability-Lookup.
 
 ## API Endpoint
 
-### Example
+### Examples
 
 ```bash
 curl -X 'POST' \
@@ -52,7 +52,21 @@ curl -X 'POST' \
   -d '{
   "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system."
 }'
-{"severity":"Critical","confidence":0.7021538019180298}
+{"severity":"Critical","confidence":0.9862}
+```
+
+For classifying severity the default model is
+[CIRCL/vulnerability-severity-classification-RoBERTa-base](https://huggingface.co/CIRCL/vulnerability-severity-classification-roberta-base). But you can specify another:
+
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/classify/severity' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system.", "model": "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
+}'
+{"severity":"Critical","confidence":0.7022}
 ```
 
 

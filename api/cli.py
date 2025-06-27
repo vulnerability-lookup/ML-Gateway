@@ -30,6 +30,7 @@ def refresh_all():
 
     models = [
         "CIRCL/vulnerability-severity-classification-RoBERTa-base",
+        "CIRCL/vulnerability-severity-classification-distilbert-base-uncased",
     ]
 
     for model_name in models:

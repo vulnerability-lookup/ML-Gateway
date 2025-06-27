@@ -1,18 +1,27 @@
-from api.models.severity_model import severity_model
+from api.models.severity_model import get_model_instance
+from api.schemas import SeverityRequest
 
 """
 The service layer contains the business logic for classification.
-It receives the input text, calls the model, and formats the output
+It receives the input text, selects the appropriate model, and formats the output.
 """
 
 
-def classify_severity(description: str):
+def classify_severity(request: SeverityRequest):
     """
     Classify the severity of a vulnerability description.
     Returns a dict with 'severity' and 'confidence'.
     """
-    output = severity_model.predict(description)
-    # Pipeline returns a list; take the first result
+    try:
+        model_instance = get_model_instance(request.model)
+    except ValueError as e:
+        return {
+            "severity": None,
+            "confidence": 0.0,
+            "error": str(e),
+        }
+
+    output = model_instance.predict(request.description)
     if output:
         # Extract label and score from the model output
         label = output.get("severity")
