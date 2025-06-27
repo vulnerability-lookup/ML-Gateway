@@ -64,7 +64,8 @@ curl -X 'POST' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{
-  "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system.", "model": "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
+  "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system.",
+  "model": "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
 }'
 {"severity":"Critical","confidence":0.7022}
 ```
