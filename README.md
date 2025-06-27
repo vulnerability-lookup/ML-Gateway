@@ -55,7 +55,7 @@ curl -X 'POST' \
 {"severity":"Critical","confidence":0.9862}
 ```
 
-For classifying severity the default model is
+For classifying severity the default model involved is
 [CIRCL/vulnerability-severity-classification-RoBERTa-base](https://huggingface.co/CIRCL/vulnerability-severity-classification-roberta-base). But you can specify another:
 
 ```bash
