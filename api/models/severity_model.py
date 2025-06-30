@@ -48,7 +48,7 @@ LABELS = {
         "High",
         "Critical",
     ],
-    "CIRCL/vulnerability-severity-classification-Chinese": ["低", "中", "高", "严重"],
+    "CIRCL/vulnerability-severity-classification-chinese-macbert-base": ["低", "中", "高"],
 }
 
 
