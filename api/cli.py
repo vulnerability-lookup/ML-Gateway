@@ -1,5 +1,7 @@
 import typer
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from huggingface_hub.utils import RepositoryNotFoundError
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from requests.exceptions import HTTPError
 
 app = typer.Typer(help="Utility CLI for managing NLP models.")
 
@@ -14,11 +16,17 @@ def refresh_model(
     Force-refresh a specific model from Hugging Face.
     """
     typer.echo(f"Refreshing model: {model_name}")
-    _ = AutoTokenizer.from_pretrained(model_name, force_download=True)
-    _ = AutoModelForSequenceClassification.from_pretrained(
-        model_name, force_download=True
-    )
-    typer.echo("Model refresh complete.")
+    try:
+        _ = AutoTokenizer.from_pretrained(model_name, force_download=True)
+        _ = AutoModelForSequenceClassification.from_pretrained(
+            model_name, force_download=True
+        )
+        typer.echo("Model refresh complete.")
+    except ValueError as e:
+        if isinstance(e.__cause__, RepositoryNotFoundError):
+            print("Repository not found:", e.__cause__)
+        else:
+            print("Download failed with:", e)
 
 
 @app.command()
@@ -31,14 +39,21 @@ def refresh_all():
     models = [
         "CIRCL/vulnerability-severity-classification-RoBERTa-base",
         "CIRCL/vulnerability-severity-classification-distilbert-base-uncased",
+        "CIRCL/vulnerability-severity-classification-chinese-macbert-base",
     ]
 
     for model_name in models:
         typer.echo(f"Refreshing model: {model_name}")
-        _ = AutoTokenizer.from_pretrained(model_name, force_download=True)
-        _ = AutoModelForSequenceClassification.from_pretrained(
-            model_name, force_download=True
-        )
+        try:
+            _ = AutoTokenizer.from_pretrained(model_name, force_download=True)
+            _ = AutoModelForSequenceClassification.from_pretrained(
+                model_name, force_download=True
+            )
+        except ValueError as e:
+            if isinstance(e.__cause__, RepositoryNotFoundError):
+                print("Repository not found:", e.__cause__)
+            else:
+                print("Download failed with:", e)
 
     typer.echo("All models refreshed.")
 
