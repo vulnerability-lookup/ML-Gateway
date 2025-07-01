@@ -70,6 +70,18 @@ curl -X 'POST' \
 {"severity":"Critical","confidence":0.7022}
 ```
 
+If you need to use the model pre-trained for Chinese language:
+
+```bash
+$ curl -X 'POST'   'http://127.0.0.1:8000/classify/severity'   -H 'accept: application/json'   -H 'Content-Type: application/json'   -d '{
+  "description": "TOTOLINK A3600R是中国吉翁电子（TOTOLINK）公司的一款6天线1200M无线路由器。TOTOLINK A3600R存在缓冲区溢出漏洞，该漏洞源于/cgi-bin/cstecgi.cgi文件的UploadCustomModule函数中的File参数未能正确验证输入数据的长度大小，攻击者可利用该漏洞在系统上执行任意代码或者导致拒绝服务。",
+  "model": "CIRCL/vulnerability-severity-classification-chinese-macbert-base"
+}'
+{"severity":"高","confidence":0.9802}
+```
+
+
+### Integration with Vulnerability-Lookup
 
 The HTML frontend templates of Vulnerability-Lookup use asynchronous JavaScript
 calls to interact with
@@ -82,7 +94,7 @@ fetch("https://vulnerability.circl.lu/api/vlai/severity-classification", {
     headers: {
     "Content-Type": "application/json"
     },
-    body: JSON.stringify({ description: "Description of the vulnerability..." })
+    body: JSON.stringify({ description: "Description of the vulnerability…" })
 })
 .then(response => response.json())
 .then(result => {

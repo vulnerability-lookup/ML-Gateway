@@ -9,11 +9,11 @@ async def lifespan(app: FastAPI):
     """
     Load all machine learning models at startup and clean up at shutdown.
     """
-    print("Starting up...")
+    print("Starting up…")
     # Models are loaded automatically at import time
     print("Models loaded successfully!")
     yield
-    print("Shutting down...")
+    print("Shutting down…")
     # Add any cleanup code here if needed
 
 

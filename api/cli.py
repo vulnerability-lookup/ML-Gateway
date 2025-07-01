@@ -1,7 +1,6 @@
 import typer
 from huggingface_hub.utils import RepositoryNotFoundError
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from requests.exceptions import HTTPError
 
 app = typer.Typer(help="Utility CLI for managing NLP models.")
 
@@ -34,7 +33,7 @@ def refresh_all():
     """
     Force-refresh all preconfigured models.
     """
-    typer.echo("Refreshing all preconfigured models...")
+    typer.echo("Refreshing all preconfigured models…")
 
     models = [
         "CIRCL/vulnerability-severity-classification-RoBERTa-base",

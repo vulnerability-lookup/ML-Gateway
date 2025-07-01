@@ -20,7 +20,7 @@ async def root():
 async def severity_classification_endpoint(request: SeverityRequest):
     """
     Endpoint to classify vulnerability severity.
-    Expects JSON: {"description": "<text>"}
-    Returns JSON: {"severity": "<label>", "confidence": <float>}
+    Expects JSON: {"description": "~text~"}
+    Returns JSON: {"severity": "~label~", "confidence": "~float~"}
     """
     return classify_severity(request)
