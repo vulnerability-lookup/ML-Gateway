@@ -39,6 +39,7 @@ def refresh_all():
         "CIRCL/vulnerability-severity-classification-RoBERTa-base",
         # "CIRCL/vulnerability-severity-classification-distilbert-base-uncased",
         "CIRCL/vulnerability-severity-classification-chinese-macbert-base",
+        "CIRCL/vulnerability-severity-classification-russian-ruRoberta-large",
     ]
 
     for model_name in models:

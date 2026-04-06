@@ -53,6 +53,12 @@ LABELS = {
         "中",
         "高",
     ],
+    "CIRCL/vulnerability-severity-classification-russian-ruRoberta-large": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical",
+    ],
 }
 
 
