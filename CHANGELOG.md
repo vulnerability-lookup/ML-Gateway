@@ -1,6 +1,15 @@
 # Changelog
 
 
+## Release 0.5.0 (2026-04-06)
+
+Added support for the Russian vulnerability severity classification model
+(CIRCL/vulnerability-severity-classification-russian-ruRoberta-large).
+
+- Registered the Russian ruRoBERTa-large model in the model registry with standard CVSS severity labels (Low, Medium, High, Critical).
+- Added the model to the CLI refresh-all command for pre-downloading.
+
+
 ## Release 0.4.0 (2025-06-27)
 
 Multilingual model support for severity classification.
