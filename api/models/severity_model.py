@@ -36,12 +36,6 @@ _model_cache: dict[str, SeverityClassifier] = {}
 
 # Label sets can vary by language or domain
 LABELS = {
-    "CIRCL/vulnerability-severity-classification-distilbert-base-uncased": [
-        "Low",
-        "Medium",
-        "High",
-        "Critical",
-    ],
     "CIRCL/vulnerability-severity-classification-RoBERTa-base": [
         "Low",
         "Medium",
@@ -69,3 +63,14 @@ def get_model_instance(model_name: str) -> SeverityClassifier:
             raise ValueError(f"Unknown model: {model_name}")
         _model_cache[model_name] = SeverityClassifier(model_name, labels)
     return _model_cache[model_name]
+
+
+def preload_models() -> None:
+    """Load every model in ``LABELS`` into the in-memory cache.
+
+    Called at import time so that running gunicorn with ``--preload`` populates
+    the cache in the master process; forked workers then share the weights via
+    copy-on-write instead of each loading their own copy.
+    """
+    for model_name in LABELS:
+        get_model_instance(model_name)

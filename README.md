@@ -30,8 +30,35 @@ poetry install
 
 ## Running the server
 
+For production on a 16-core machine, we recommend gunicorn with uvicorn workers
+and gunicorn's `--preload` flag:
+
 ```bash
-poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 33 --worker-class gevent --graceful-timeout 2 --timeout 300 --reuse-port --proxy-protocol
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 poetry run gunicorn api.main:app \
+  -k uvicorn.workers.UvicornWorker \
+  -w 4 --preload \
+  -b 0.0.0.0:8000 \
+  --graceful-timeout 2 --timeout 300 \
+  --reuse-port --proxy-protocol
+```
+
+Why these settings on 16 cores:
+
+- `--preload` imports the app (and therefore loads every model) once in the
+  master process before forking. Workers inherit the loaded weights via
+  copy-on-write, so the models are held in memory once instead of once per
+  worker.
+- `-w 4` with `OMP_NUM_THREADS=4` / `MKL_NUM_THREADS=4` gives each worker 4
+  PyTorch intra-op threads. 4 × 4 = 16 keeps every core busy during inference
+  while avoiding the memory overhead of 8+ worker processes.
+- `--reuse-port` lets the kernel spread incoming connections across workers;
+  `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
+  aware load balancer.
+
+For development, a single uvicorn process is sufficient:
+
+```bash
+poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
 Deployment is straightforward—no configuration files or databases are required.
