@@ -165,7 +165,7 @@ companies and institutions.
 [GNU Affero General Public License version 3](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ~~~
-Copyright (c) 2025 Computer Incident Response Center Luxembourg (CIRCL)
-Copyright (C) 2025 Cédric Bonhomme - https://github.com/cedricbonhomme
+Copyright (c) 2025-2026 Computer Incident Response Center Luxembourg (CIRCL)
+Copyright (C) 2025-2026 Cédric Bonhomme - https://github.com/cedricbonhomme
 ~~~
 
