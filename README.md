@@ -31,7 +31,7 @@ poetry install
 ## Running the server
 
 ```bash
-poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000
+poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 33 --worker-class gevent --graceful-timeout 2 --timeout 300 --reuse-port --proxy-protocol
 ```
 
 Deployment is straightforward—no configuration files or databases are required.

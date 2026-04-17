@@ -18,7 +18,8 @@ dependencies = [
     "transformers (>=4.51.3,<5.0.0)",
     "torch (>=2.7.0,<3.0.0)",
     "uvicorn[standard] (>=0.34.2,<0.35.0)",
-    "typer (>=0.15.4,<0.16.0)"
+    "typer (>=0.15.4,<0.16.0)",
+    "gunicorn (>=25.3.0,<26.0.0)"
 ]
 
 
