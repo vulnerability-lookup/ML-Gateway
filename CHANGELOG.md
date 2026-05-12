@@ -1,6 +1,34 @@
 # Changelog
 
 
+## Release 1.1.0 (2026-05-12)
+
+Adds a time-to-live to the per-worker inference cache to bound how long
+stale entries can sit in memory between requests, in addition to the
+existing size cap.
+
+- Replaced `functools.lru_cache` in
+  `api/services/classification_service.py` with
+  `cachetools.TTLCache(maxsize=10_000, ttl=3600)` + `@cached`. Entries
+  now expire one hour after insertion, in addition to being evicted
+  when the size cap is reached.
+- A `threading.Lock` is wired in via the `lock=` argument of `@cached`.
+  The lock is held only around cache reads and writes, not around the
+  wrapped inference call, so concurrent requests still run in parallel.
+- Expiry is lazy: stale entries are dropped when their key is next
+  accessed or when an insertion scans the cache. There is no background
+  sweep, so cache memory is reclaimed on use rather than on a timer.
+- Added `cachetools (>=5.3.0,<6.0.0)` as a runtime dependency.
+
+Note: if a worker is still being OOM-killed after this change, the cache
+is unlikely to be the cause — at 10,000 entries × ~1–2 KB it is bounded
+at roughly 10–20 MB. The more common culprits under sustained
+transformers load are PyTorch allocator fragmentation and thread-stack
+growth; mitigations there include gunicorn's `--max-requests` to
+recycle workers periodically, restricting `OMP_NUM_THREADS`, and
+tuning `MALLOC_TRIM_THRESHOLD_`.
+
+
 ## Release 1.0.0 (2026-04-17)
 
 First stable release. The focus of this release is production deployment:
