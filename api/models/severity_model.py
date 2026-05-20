@@ -1,20 +1,49 @@
+from typing import TypedDict
+
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 """
 This module defines a model wrapper for the severity classification.
 """
 
 
+class Prediction(TypedDict):
+    """Inference result returned by :meth:`SeverityClassifier.predict`."""
+
+    severity: str
+    confidence: float
+
+
 class SeverityClassifier:
+    """Wraps a Hugging Face sequence-classification model for severity prediction.
+
+    Attributes:
+        model_name: Hugging Face repository identifier (e.g.
+            ``CIRCL/vulnerability-severity-classification-RoBERTa-base``).
+        labels: Ordered list of class labels matching the model's logits.
+        revision: Commit SHA of the snapshot that was loaded from the Hugging
+            Face Hub, or ``None`` if the source did not carry revision
+            metadata (e.g. a local path). Returned to API clients so they
+            can pin and audit which exact weights produced a prediction.
+    """
+
     def __init__(self, model_name: str, labels: list[str]):
         self.model_name = model_name
         self.labels = labels
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
         self.model.eval()  # Disable dropout etc.
+        # transformers stamps the resolved snapshot SHA onto
+        # ``model.config._commit_hash`` during ``from_pretrained``, for both
+        # fresh downloads and cached snapshots. The leading underscore marks
+        # it as private API, but it has been the de facto way to surface the
+        # loaded revision across recent major versions of transformers.
+        self.revision: str | None = getattr(
+            self.model.config, "_commit_hash", None
+        )
 
-    def predict(self, description: str):
+    def predict(self, description: str) -> "Prediction":
         inputs = self.tokenizer(
             description, return_tensors="pt", truncation=True, padding=True
         )

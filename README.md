@@ -79,7 +79,7 @@ curl -X 'POST' \
   -d '{
   "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system."
 }'
-{"severity":"Critical","confidence":0.9862}
+{"severity":"Critical","confidence":0.9862,"model":"CIRCL/vulnerability-severity-classification-RoBERTa-base","model_revision":"93b8afccb438608a51c33983a0fafaedd0730f11"}
 ```
 
 For classifying severity the default model involved is
@@ -94,7 +94,7 @@ curl -X 'POST' \
   "description": "SAP NetWeaver Visual Composer Metadata Uploader is not protected with a proper authorization, allowing unauthenticated agent to upload potentially malicious executable binaries that could severely harm the host system. This could significantly affect the confidentiality, integrity, and availability of the targeted system.",
   "model": "CIRCL/vulnerability-severity-classification-distilbert-base-uncased"
 }'
-{"severity":"Critical","confidence":0.7022}
+{"severity":"Critical","confidence":0.7022,"model":"CIRCL/vulnerability-severity-classification-distilbert-base-uncased","model_revision":"<commit-sha>"}
 ```
 
 If you need to use the model pre-trained for Chinese language:
@@ -104,7 +104,7 @@ curl -X 'POST'   'http://127.0.0.1:8000/classify/severity'   -H 'accept: applica
   "description": "TOTOLINK A3600R是中国吉翁电子（TOTOLINK）公司的一款6天线1200M无线路由器。TOTOLINK A3600R存在缓冲区溢出漏洞，该漏洞源于/cgi-bin/cstecgi.cgi文件的UploadCustomModule函数中的File参数未能正确验证输入数据的长度大小，攻击者可利用该漏洞在系统上执行任意代码或者导致拒绝服务。",
   "model": "CIRCL/vulnerability-severity-classification-chinese-macbert-base"
 }'
-{"severity":"高","confidence":0.9802}
+{"severity":"高","confidence":0.9802,"model":"CIRCL/vulnerability-severity-classification-chinese-macbert-base","model_revision":"<commit-sha>"}
 ```
 
 
@@ -134,7 +134,17 @@ fetch("https://vulnerability.circl.lu/api/vlai/severity-classification", {
 
 When a request is received, the Vulnerability-Lookup backend forwards it to the ML-Gateway API.
 The ML-Gateway performs the inference, and the resulting severity classification,
-along with a confidence score,is returned and displayed to the user.
+along with a confidence score, is returned and displayed to the user.
+
+### Response fields
+
+| Field | Type | Description |
+|---|---|---|
+| `severity` | `string \| null` | Predicted severity label (e.g. `Low`, `Medium`, `High`, `Critical`). `null` when classification could not be performed. |
+| `confidence` | `float` | Softmax probability of the predicted class, rounded to four decimals. |
+| `model` | `string` | Hugging Face model identifier that produced the prediction. |
+| `model_revision` | `string \| null` | Commit SHA of the model snapshot loaded from the Hugging Face Hub. `null` when the snapshot does not carry revision metadata (e.g. a local path). Useful to pin and audit the exact weights that produced a result. |
+| `error` | `string` | Present only when classification failed; carries a human-readable message. |
 
 
 ## Refreshing the models

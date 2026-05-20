@@ -1,8 +1,9 @@
 from threading import Lock
+from typing import Any
 
 from cachetools import TTLCache, cached
 
-from api.models.severity_model import get_model_instance
+from api.models.severity_model import Prediction, get_model_instance
 from api.schemas import SeverityRequest
 
 """
@@ -27,28 +28,37 @@ _predict_cache_lock = Lock()
 
 
 @cached(_predict_cache, lock=_predict_cache_lock)
-def _cached_predict(model_name: str, description: str) -> dict:
+def _cached_predict(model_name: str, description: str) -> Prediction:
     return get_model_instance(model_name).predict(description)
 
 
-def classify_severity(request: SeverityRequest):
+def classify_severity(request: SeverityRequest) -> dict[str, Any]:
+    """Classify the severity of a vulnerability description.
+
+    Returns a dict shaped like :class:`api.schemas.SeverityResponse`. In
+    addition to the prediction (``severity``, ``confidence``), the result
+    carries the provenance of the model that produced it: the model
+    identifier and the Hugging Face commit SHA of the loaded snapshot,
+    so callers can identify exactly which weights were used.
     """
-    Classify the severity of a vulnerability description.
-    Returns a dict with 'severity' and 'confidence'.
-    """
+    # Resolve the classifier up front so we can surface ``model`` and
+    # ``model_revision`` even on the error path, and so unknown-model errors
+    # don't go through the prediction cache.
     try:
-        output = _cached_predict(request.model, request.description)
+        classifier = get_model_instance(request.model)
     except ValueError as e:
         return {
             "severity": None,
             "confidence": 0.0,
+            "model": request.model,
+            "model_revision": None,
             "error": str(e),
         }
 
-    if output:
-        # Extract label and score from the model output
-        label = output.get("severity")
-        score = output.get("confidence", 0.0)
-    else:
-        label, score = None, 0.0
-    return {"severity": label, "confidence": float(score)}
+    output = _cached_predict(request.model, request.description)
+    return {
+        "severity": output.get("severity"),
+        "confidence": float(output.get("confidence", 0.0)),
+        "model": classifier.model_name,
+        "model_revision": classifier.revision,
+    }

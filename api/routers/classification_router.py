@@ -1,6 +1,8 @@
+from typing import Any
+
 from fastapi import APIRouter
 
-from api.schemas import SeverityRequest
+from api.schemas import SeverityRequest, SeverityResponse
 from api.services.classification_service import classify_severity
 
 """
@@ -12,15 +14,21 @@ router = APIRouter()
 
 
 @router.get("/")
-async def root():
+async def root() -> str:
     return "OK"
 
 
-@router.post("/classify/severity")
-async def severity_classification_endpoint(request: SeverityRequest):
-    """
-    Endpoint to classify vulnerability severity.
-    Expects JSON: {"description": "~text~"}
-    Returns JSON: {"severity": "~label~", "confidence": "~float~"}
+@router.post("/classify/severity", response_model=SeverityResponse)
+async def severity_classification_endpoint(
+    request: SeverityRequest,
+) -> dict[str, Any]:
+    """Classify a vulnerability description's severity.
+
+    Request body: ``{"description": "<text>", "model": "<optional-model-id>"}``.
+
+    The response includes the prediction (``severity``, ``confidence``)
+    together with the model identifier and the Hugging Face commit SHA of
+    the loaded snapshot (``model``, ``model_revision``), so callers can pin
+    and audit which exact weights produced the result.
     """
     return classify_severity(request)
