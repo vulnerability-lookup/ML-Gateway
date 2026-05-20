@@ -1,6 +1,36 @@
 # Changelog
 
 
+## Release 1.2.0 (2026-05-20)
+
+Classification responses now carry the provenance of the model that
+produced them, so callers can pin and audit which exact weights generated
+a given result.
+
+- `POST /classify/severity` responses now include two new fields:
+  - `model`: the Hugging Face repository identifier that produced the
+    prediction (e.g.
+    `CIRCL/vulnerability-severity-classification-RoBERTa-base`).
+  - `model_revision`: the commit SHA of the snapshot that was loaded
+    from the Hugging Face Hub at startup, or `null` when the source
+    does not carry revision metadata (for example, models loaded from
+    a local path).
+- The revision is captured once in `SeverityClassifier.__init__` from
+  `model.config._commit_hash`, which transformers stamps onto the
+  config during `from_pretrained` for both fresh downloads and cached
+  snapshots. No extra Hugging Face API call is made at request time.
+- A new `SeverityResponse` Pydantic schema is wired as the endpoint's
+  `response_model`, so the OpenAPI documentation now describes every
+  response field, including the provenance metadata and the optional
+  `error` field returned when an unknown model is requested.
+- `error` responses (unknown model) now also include `model` and
+  `model_revision` (the latter as `null`) so the response shape stays
+  consistent across success and failure paths.
+
+This is a backwards-compatible change for clients that read only
+`severity` and `confidence`; the new keys are additive.
+
+
 ## Release 1.1.0 (2026-05-12)
 
 Adds a time-to-live to the per-worker inference cache to bound how long
