@@ -57,6 +57,9 @@ packages = [
 
 [tool.mypy]
 python_version = "3.12"
+# api/ is a PEP 420 namespace package (no __init__.py); without this mypy
+# maps api/services/classification_service.py to two different module names.
+explicit_package_bases = true
 check_untyped_defs = true
 ignore_errors = false
 ignore_missing_imports = false
@@ -76,5 +79,7 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "pytest (>=9.1.1,<10.0.0)",
-    "httpx (>=0.28.1,<0.29.0)"
+    "httpx (>=0.28.1,<0.29.0)",
+    "mypy (>=2.3.0,<3.0.0)",
+    "types-cachetools (>=7.0.0.20260713,<8.0.0.0)"
 ]

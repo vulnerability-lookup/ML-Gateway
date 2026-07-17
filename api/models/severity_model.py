@@ -52,8 +52,9 @@ class SeverityClassifier:
             outputs = self.model(**inputs)
             probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
 
-        # Get top class index and confidence
-        predicted_index = torch.argmax(probabilities, dim=-1).item()
+        # Get top class index and confidence. ``Tensor.item()`` is typed as
+        # ``int | float``; argmax always yields an integral tensor.
+        predicted_index = int(torch.argmax(probabilities, dim=-1).item())
         return {
             "severity": self.labels[predicted_index],
             "confidence": round(probabilities[0][predicted_index].item(), 4),
