@@ -23,6 +23,9 @@ New endpoint: MITRE ATT&CK technique classification.
   added as a `dev` dependency group.
 - New CI workflow (GitHub Actions) running mypy and the test suite on
   every push to `main` and every pull request.
+- The classification endpoints are now plain (non-async) handlers, so
+  FastAPI runs them in its threadpool and CPU-bound model inference no
+  longer blocks the event loop for concurrent requests.
 - `mypy` and `types-cachetools` are now dev dependencies, so
   `poetry run mypy api/` uses the project virtualenv instead of relying
   on a system-wide mypy that cannot see the dependencies;
