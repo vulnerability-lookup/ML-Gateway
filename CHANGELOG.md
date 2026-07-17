@@ -17,6 +17,10 @@ New endpoint: MITRE ATT&CK technique classification.
   (`api/data/attack_technique_names.json`).
 - The model is preloaded at startup (gunicorn `--preload` compatible)
   and included in `ml-gw-cli refresh-all`.
+- New test suite (`poetry run pytest`) covering both classification
+  endpoints through the router and service layers with a stubbed model
+  layer, so it runs without downloading models. `pytest` and `httpx` are
+  added as a `dev` dependency group.
 
 
 ## Release 1.2.0 (2026-05-20)
