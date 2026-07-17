@@ -32,7 +32,7 @@ def technique_names() -> dict[str, str]:
     return names
 
 
-class TechniqueScore(TypedDict):
+class RankedTechnique(TypedDict):
     """One ranked technique returned by :meth:`AttackTechniqueClassifier.predict`."""
 
     technique: str
@@ -69,7 +69,7 @@ class AttackTechniqueClassifier:
             id_to_label[index] for index in sorted(id_to_label)
         ]
 
-    def predict(self, description: str) -> list[TechniqueScore]:
+    def predict(self, description: str) -> list[RankedTechnique]:
         """Return every vocabulary technique ranked by sigmoid probability.
 
         Techniques with a probability of at least 0.5 carry
@@ -87,15 +87,21 @@ class AttackTechniqueClassifier:
 
         names = technique_names()
         ranked_indices = torch.argsort(probabilities, descending=True).tolist()
-        return [
-            {
-                "technique": self.labels[index],
-                "name": names.get(self.labels[index]),
-                "score": round(probabilities[index].item(), 4),
-                "predicted": probabilities[index].item() >= 0.5,
-            }
-            for index in ranked_indices
-        ]
+        ranking: list[RankedTechnique] = []
+        for index in ranked_indices:
+            # Derive ``predicted`` from the rounded score that clients see,
+            # so the response never shows ``score: 0.5`` with
+            # ``predicted: false`` (or the reverse) at the threshold.
+            score = round(probabilities[index].item(), 4)
+            ranking.append(
+                {
+                    "technique": self.labels[index],
+                    "name": names.get(self.labels[index]),
+                    "score": score,
+                    "predicted": score >= 0.5,
+                }
+            )
+        return ranking
 
 
 # Multi-label models this endpoint may load. Labels come from each model's

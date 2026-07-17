@@ -3,7 +3,7 @@ from typing import Any
 
 from cachetools import TTLCache, cached
 
-from api.models.attack_model import TechniqueScore, get_attack_model_instance
+from api.models.attack_model import RankedTechnique, get_attack_model_instance
 from api.models.severity_model import Prediction, get_model_instance
 from api.schemas import AttackTechniquesRequest, SeverityRequest
 
@@ -77,7 +77,7 @@ _attack_predict_cache_lock = Lock()
 @cached(_attack_predict_cache, lock=_attack_predict_cache_lock)
 def _cached_predict_attack(
     model_name: str, description: str
-) -> list[TechniqueScore]:
+) -> list[RankedTechnique]:
     return get_attack_model_instance(model_name).predict(description)
 
 
@@ -100,8 +100,10 @@ def classify_attack_techniques(request: AttackTechniquesRequest) -> dict[str, An
         }
 
     ranking = _cached_predict_attack(request.model, request.description)
+    # Copy the sliced entries: the cached ranking is mutable, and handing out
+    # references would let any downstream mutation poison the cache.
     return {
-        "techniques": ranking[: request.top_k],
+        "techniques": [technique.copy() for technique in ranking[: request.top_k]],
         "model": classifier.model_name,
         "model_revision": classifier.revision,
     }
