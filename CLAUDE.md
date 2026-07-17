@@ -24,6 +24,9 @@ poetry run ml-gw-cli refresh-model --model-name "CIRCL/vulnerability-severity-cl
 # Type checking
 poetry run mypy api/
 
+# Run the test suite (stubs the model layer; no model downloads)
+poetry run pytest
+
 # Docker deployment
 docker compose up -d
 ```
