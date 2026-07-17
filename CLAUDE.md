@@ -34,7 +34,7 @@ The `api/` package follows a layered architecture:
 
 - **Routers** (`routers/classification_router.py`) — FastAPI endpoint definitions. Routes to service layer.
 - **Services** (`services/classification_service.py`) — Business logic. Selects model, formats output.
-- **Models** (`models/severity_model.py`) — `SeverityClassifier` wraps Hugging Face transformers. Models are lazy-loaded and cached in an in-memory `_model_cache` dict keyed by model name. The `LABELS` dict is the model registry mapping model names to their label sets.
+- **Models** (`models/severity_model.py`, `models/attack_model.py`) — `SeverityClassifier` and `AttackTechniqueClassifier` wrap Hugging Face transformers. Models are lazy-loaded and cached in per-module in-memory `_model_cache` dicts keyed by model name. The `LABELS` dict is the severity model registry mapping model names to their label sets; the attack classifier reads labels from the model config's `id2label` and gates loadable repos through the `ATTACK_MODELS` allow-list. `api/data/attack_technique_names.json` maps technique IDs to official ATT&CK names.
 - **Schemas** (`schemas.py`) — Pydantic request/response models. Default model is `CIRCL/vulnerability-severity-classification-RoBERTa-base`.
 
 Entry points: `api.main:app` (FastAPI), `api.cli:app` (Typer CLI registered as `ml-gw-cli`).

@@ -2,8 +2,16 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from api.schemas import SeverityRequest, SeverityResponse
-from api.services.classification_service import classify_severity
+from api.schemas import (
+    AttackTechniquesRequest,
+    AttackTechniquesResponse,
+    SeverityRequest,
+    SeverityResponse,
+)
+from api.services.classification_service import (
+    classify_attack_techniques,
+    classify_severity,
+)
 
 """
 This module sets up the API route(s) using FastAPI's APIRouter.
@@ -32,3 +40,21 @@ async def severity_classification_endpoint(
     and audit which exact weights produced the result.
     """
     return classify_severity(request)
+
+
+@router.post("/classify/attack-techniques", response_model=AttackTechniquesResponse)
+async def attack_techniques_endpoint(
+    request: AttackTechniquesRequest,
+) -> dict[str, Any]:
+    """Rank MITRE ATT&CK techniques for a vulnerability description.
+
+    Request body: ``{"description": "<text>", "model": "<optional-model-id>",
+    "top_k": <optional-int>}``.
+
+    Multi-label classification: every technique in the model's vocabulary is
+    scored independently (sigmoid) and the top-k are returned ranked by
+    score, each with its ATT&CK ID, official name, score, and whether it
+    clears the 0.5 prediction threshold. The response also carries the model
+    identifier and Hugging Face snapshot SHA, like ``/classify/severity``.
+    """
+    return classify_attack_techniques(request)

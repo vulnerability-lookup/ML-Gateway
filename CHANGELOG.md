@@ -1,6 +1,24 @@
 # Changelog
 
 
+## Release 1.3.0 (2026-07-17)
+
+New endpoint: MITRE ATT&CK technique classification.
+
+- `POST /classify/attack-techniques` ranks ATT&CK (Enterprise) techniques
+  for a vulnerability description using
+  `CIRCL/vulnerability-attack-technique-classification-roberta-base`
+  (multi-label; sigmoid scores, `top_k` selectable, 0.5 prediction
+  threshold flagged per technique). Each technique is returned with its
+  ID, official name, score, and `predicted` flag, alongside the same
+  `model` / `model_revision` provenance fields as `/classify/severity`.
+- Technique names are resolved from a bundled `id -> name` table
+  extracted from the MITRE enterprise ATT&CK STIX data
+  (`api/data/attack_technique_names.json`).
+- The model is preloaded at startup (gunicorn `--preload` compatible)
+  and included in `ml-gw-cli refresh-all`.
+
+
 ## Release 1.2.0 (2026-05-20)
 
 Classification responses now carry the provenance of the model that

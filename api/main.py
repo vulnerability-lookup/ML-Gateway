@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
+from api.models.attack_model import preload_models as preload_attack_models
 from api.models.severity_model import preload_models
 from api.routers.classification_router import router as classification_router
 
@@ -8,6 +9,7 @@ from api.routers.classification_router import router as classification_router
 # happens once in the master process, so forked workers share the weights via
 # copy-on-write rather than each loading their own copy.
 preload_models()
+preload_attack_models()
 
 
 @asynccontextmanager

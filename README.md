@@ -108,6 +108,42 @@ curl -X 'POST'   'http://127.0.0.1:8000/classify/severity'   -H 'accept: applica
 ```
 
 
+### ATT&CK technique classification
+
+`POST /classify/attack-techniques` ranks MITRE ATT&CK (Enterprise) techniques
+for a vulnerability description with
+[CIRCL/vulnerability-attack-technique-classification-roberta-base](https://huggingface.co/CIRCL/vulnerability-attack-technique-classification-roberta-base).
+Unlike severity classification this is a *multi-label* task: every technique
+in the model's vocabulary is scored independently (sigmoid), so the scores do
+not sum to 1 and several techniques can clear the 0.5 prediction threshold at
+once. The `top_k` field (default 10) controls how many ranked techniques are
+returned; the full ranking is computed and cached once per description, so
+varying `top_k` does not re-run inference.
+
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/classify/attack-techniques' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "description": "Zoho ManageEngine ServiceDesk Plus before 11306 is vulnerable to unauthenticated remote code execution.",
+  "top_k": 3
+}'
+{"techniques":[{"technique":"T1190","name":"Exploit Public-Facing Application","score":0.7147,"predicted":true},{"technique":"T1059","name":"Command and Scripting Interpreter","score":0.7063,"predicted":true},{"technique":"T1505","name":"Server Software Component","score":0.6834,"predicted":true}],"model":"CIRCL/vulnerability-attack-technique-classification-roberta-base","model_revision":"3b98a1d962b5c35c5dc82ac188f8d2a9aae63eda"}
+```
+
+Response fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `techniques` | `array` | Top-k techniques ranked by score, best first. Empty when classification failed. |
+| `techniques[].technique` | `string` | MITRE ATT&CK technique ID (e.g. `T1190`). |
+| `techniques[].name` | `string \| null` | Official ATT&CK technique name, from the bundled ATT&CK name table. |
+| `techniques[].score` | `float` | Sigmoid probability, rounded to four decimals. |
+| `techniques[].predicted` | `bool` | `true` when the score is at least 0.5, the threshold used by the model's training metrics. |
+| `model` / `model_revision` / `error` | | Same provenance and error semantics as `/classify/severity`. |
+
+
 ### Integration with Vulnerability-Lookup
 
 The HTML frontend templates of Vulnerability-Lookup use asynchronous JavaScript

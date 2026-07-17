@@ -3,8 +3,9 @@ from typing import Any
 
 from cachetools import TTLCache, cached
 
+from api.models.attack_model import TechniqueScore, get_attack_model_instance
 from api.models.severity_model import Prediction, get_model_instance
-from api.schemas import SeverityRequest
+from api.schemas import AttackTechniquesRequest, SeverityRequest
 
 """
 The service layer contains the business logic for classification.
@@ -59,6 +60,48 @@ def classify_severity(request: SeverityRequest) -> dict[str, Any]:
     return {
         "severity": output.get("severity"),
         "confidence": float(output.get("confidence", 0.0)),
+        "model": classifier.model_name,
+        "model_revision": classifier.revision,
+    }
+
+
+# Separate cache for the multi-label endpoint: cachetools keys entries by
+# call arguments only (not by function), so sharing ``_predict_cache``
+# would let a (model, description) pair collide across endpoints.
+_attack_predict_cache: TTLCache = TTLCache(
+    maxsize=_PREDICT_CACHE_SIZE, ttl=_PREDICT_CACHE_TTL_SECONDS
+)
+_attack_predict_cache_lock = Lock()
+
+
+@cached(_attack_predict_cache, lock=_attack_predict_cache_lock)
+def _cached_predict_attack(
+    model_name: str, description: str
+) -> list[TechniqueScore]:
+    return get_attack_model_instance(model_name).predict(description)
+
+
+def classify_attack_techniques(request: AttackTechniquesRequest) -> dict[str, Any]:
+    """Rank ATT&CK techniques for a vulnerability description.
+
+    Returns a dict shaped like :class:`api.schemas.AttackTechniquesResponse`.
+    The full vocabulary ranking is computed (and cached) once per
+    (model, description); ``top_k`` only slices the cached result, so
+    varying it does not re-run inference.
+    """
+    try:
+        classifier = get_attack_model_instance(request.model)
+    except ValueError as e:
+        return {
+            "techniques": [],
+            "model": request.model,
+            "model_revision": None,
+            "error": str(e),
+        }
+
+    ranking = _cached_predict_attack(request.model, request.description)
+    return {
+        "techniques": ranking[: request.top_k],
         "model": classifier.model_name,
         "model_revision": classifier.revision,
     }
