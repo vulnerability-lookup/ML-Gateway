@@ -26,8 +26,13 @@ async def root() -> str:
     return "OK"
 
 
+# The classification endpoints are plain ``def``, not ``async def``: FastAPI
+# then runs them in its threadpool, so the synchronous CPU-bound torch
+# inference cannot block the event loop for every other request.
+
+
 @router.post("/classify/severity", response_model=SeverityResponse)
-async def severity_classification_endpoint(
+def severity_classification_endpoint(
     request: SeverityRequest,
 ) -> dict[str, Any]:
     """Classify a vulnerability description's severity.
@@ -43,7 +48,7 @@ async def severity_classification_endpoint(
 
 
 @router.post("/classify/attack-techniques", response_model=AttackTechniquesResponse)
-async def attack_techniques_endpoint(
+def attack_techniques_endpoint(
     request: AttackTechniquesRequest,
 ) -> dict[str, Any]:
     """Rank MITRE ATT&CK techniques for a vulnerability description.
