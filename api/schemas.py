@@ -58,3 +58,83 @@ class SeverityResponse(BaseModel):
             "performed. Absent on success."
         ),
     )
+
+
+class AttackTechniquesRequest(BaseModel):
+    description: str
+    model: str = Field(
+        default="CIRCL/vulnerability-attack-technique-classification-roberta-base",
+        description=(
+            "Hugging Face model identifier to use for ATT&CK technique "
+            "classification."
+        ),
+    )
+    top_k: int = Field(
+        default=10,
+        ge=1,
+        description="Number of top-ranked techniques to return.",
+    )
+
+
+class TechniqueScore(BaseModel):
+    technique: str = Field(
+        description="MITRE ATT&CK technique ID (e.g. 'T1190').",
+    )
+    name: str | None = Field(
+        description=(
+            "Official ATT&CK technique name (e.g. 'Exploit Public-Facing "
+            "Application'). ``None`` if the ID is not in the bundled "
+            "ATT&CK name table."
+        ),
+    )
+    score: float = Field(
+        description=(
+            "Sigmoid probability for this technique, rounded to four "
+            "decimals. Multi-label: scores are independent and do not sum "
+            "to 1."
+        ),
+    )
+    predicted: bool = Field(
+        description=(
+            "True when the score is at least 0.5 — the threshold the "
+            "model's training metrics use for a positive prediction."
+        ),
+    )
+
+
+class AttackTechniquesResponse(BaseModel):
+    """Response payload for ``POST /classify/attack-techniques``.
+
+    Carries the same model provenance as :class:`SeverityResponse` (model
+    identifier and Hugging Face snapshot SHA) so callers can pin and audit
+    which exact weights produced the ranking.
+    """
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    techniques: list[TechniqueScore] = Field(
+        description=(
+            "Top-k techniques ranked by score, best first. Empty when "
+            "classification could not be performed."
+        ),
+    )
+    model: str = Field(
+        description=(
+            "Hugging Face model identifier that produced this prediction."
+        ),
+    )
+    model_revision: str | None = Field(
+        description=(
+            "Commit SHA of the model snapshot resolved at load time on the "
+            "Hugging Face Hub. ``None`` when the snapshot does not carry "
+            "revision metadata (for example, models loaded from a local "
+            "path)."
+        ),
+    )
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Human-readable error message when classification could not be "
+            "performed. Absent on success."
+        ),
+    )
