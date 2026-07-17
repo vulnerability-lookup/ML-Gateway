@@ -21,6 +21,15 @@ New endpoint: MITRE ATT&CK technique classification.
   endpoints through the router and service layers with a stubbed model
   layer, so it runs without downloading models. `pytest` and `httpx` are
   added as a `dev` dependency group.
+- New CI workflow (GitHub Actions) running mypy and the test suite on
+  every push to `main` and every pull request.
+- `mypy` and `types-cachetools` are now dev dependencies, so
+  `poetry run mypy api/` uses the project virtualenv instead of relying
+  on a system-wide mypy that cannot see the dependencies;
+  `explicit_package_bases` is enabled since `api/` is a namespace
+  package. Fixed the one strictness error this surfaced
+  (`Tensor.item()` is typed `int | float`; the argmax index is now
+  wrapped in `int()`).
 
 
 ## Release 1.2.0 (2026-05-20)
