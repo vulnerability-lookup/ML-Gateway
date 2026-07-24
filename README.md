@@ -34,7 +34,7 @@ For production on a 16-core machine, we recommend gunicorn with uvicorn workers
 and gunicorn's `--preload` flag:
 
 ```bash
-OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 poetry run gunicorn api.main:app \
+HF_HUB_OFFLINE=1 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 poetry run gunicorn api.main:app \
   -k uvicorn.workers.UvicornWorker \
   -w 4 --preload \
   -b 0.0.0.0:8000 \
