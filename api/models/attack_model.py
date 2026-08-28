@@ -6,6 +6,8 @@ from typing import TypedDict
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from api.models.tokenizer_utils import clamp_tokenizer_max_length
+
 """
 This module defines a model wrapper for ATT&CK technique classification.
 
@@ -60,6 +62,7 @@ class AttackTechniqueClassifier:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
         self.model.eval()  # Disable dropout etc.
+        clamp_tokenizer_max_length(self.tokenizer, self.model.config)
         # transformers stamps the resolved snapshot SHA onto
         # ``model.config._commit_hash`` during ``from_pretrained``; see
         # SeverityClassifier for the caveat about it being private API.
