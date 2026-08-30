@@ -1,6 +1,26 @@
 # Changelog
 
 
+## Release 1.4.0 (2026-08-30)
+
+Fix for long inputs crashing inference, plus documentation and
+dependency updates.
+
+- Fixed a crash on long descriptions: some fine-tuned repos (notably the
+  Chinese MacBERT model) ship no `model_max_length` in their
+  `tokenizer_config.json`, so transformers reports a huge sentinel value
+  and `truncation=True` never actually truncated — inputs over 512
+  tokens overflowed the model's position-embedding table at inference
+  time. Both classifiers now clamp the tokenizer's limit to the model's
+  `max_position_embeddings` (minus the two offset slots RoBERTa-style
+  models reserve) right after loading, via a shared
+  `clamp_tokenizer_max_length` helper with its own test suite.
+- Documentation: the README now shows `HF_HUB_OFFLINE=1` as an example
+  of starting the server without pulling model updates from the
+  Hugging Face Hub.
+- Updated dependencies.
+
+
 ## Release 1.3.0 (2026-07-17)
 
 New endpoint: MITRE ATT&CK technique classification.
