@@ -25,6 +25,17 @@ server started with `HF_HUB_OFFLINE=1`, otherwise startup fails with
     vulnerabilities to an indexed ID or a free text, by plain cosine.
   All responses carry the same `model` / `model_revision` / `error` fields
   as the classification endpoints.
+- `POST /index/attack-biencoder` now requires `Authorization: Bearer
+  <ML_GATEWAY_INDEX_TOKEN>` (constant-time comparison; `401` otherwise).
+  While the variable is unset the endpoint refuses every call with `503`
+  and never accepts. The read endpoints stay unauthenticated.
+- `ML_GATEWAY_INDEX_MAX_ITEMS` (default 5,000,000) caps the number of
+  distinct IDs the index endpoint may grow the index to; a call that
+  would exceed it is refused with `507`. Updates of indexed IDs are
+  always allowed.
+- The README's production example binds `127.0.0.1` and explains why the
+  gateway must not be public; docker-compose publishes the port on
+  localhost only.
 - No inference runs in the gunicorn master any more. The bi-encoder's
   technique vectors are computed by `AttackBiEncoder.warm_up()` in the
   FastAPI lifespan, i.e. in each worker after the fork: a torch forward

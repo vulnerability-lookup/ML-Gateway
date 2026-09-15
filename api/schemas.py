@@ -307,3 +307,36 @@ class RelatedResponse(BaseModel):
         default=None,
         description="Human-readable error message when the search could not run.",
     )
+
+
+class TechniqueListEntry(BaseModel):
+    technique: str = Field(description="MITRE ATT&CK technique ID (e.g. 'T1190').")
+    name: str | None = Field(
+        description="Official ATT&CK technique name. ``None`` if unknown.",
+    )
+    in_vocabulary: bool = Field(
+        description="True when the bi-encoder was trained on this technique.",
+    )
+
+
+class TechniqueListResponse(BaseModel):
+    """Response payload for ``GET /retrieve/attack-biencoder/techniques``.
+
+    Every technique the technique-retrieval endpoint can rank for: the ones
+    the bi-encoder was trained on and every other enterprise technique with
+    a bundled ATT&CK text. Sorted by ID.
+    """
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    techniques: list[TechniqueListEntry] = Field(
+        description="Retrievable techniques, sorted by ID. Empty on error.",
+    )
+    model: str = Field(description="Hugging Face model identifier the list is for.")
+    model_revision: str | None = Field(
+        description="Commit SHA of the model snapshot that defines the vocabulary.",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Human-readable error message when the model could not be resolved.",
+    )

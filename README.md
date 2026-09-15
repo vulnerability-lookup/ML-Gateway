@@ -34,13 +34,21 @@ For production on a 16-core machine, we recommend gunicorn with uvicorn workers
 and gunicorn's `--preload` flag:
 
 ```bash
-HF_HUB_OFFLINE=1 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 poetry run gunicorn api.main:app \
+HF_HUB_OFFLINE=1 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+ML_GATEWAY_INDEX_TOKEN='<shared secret>' \
+poetry run gunicorn api.main:app \
   -k uvicorn.workers.UvicornWorker \
   -w 4 --preload \
-  -b 0.0.0.0:8000 \
+  -b 127.0.0.1:8000 \
   --graceful-timeout 2 --timeout 300 \
   --reuse-port --proxy-protocol
 ```
+
+Bind the gateway to localhost or a private interface that only
+Vulnerability-Lookup can reach, never to a public address: the read endpoints
+are unauthenticated and run CPU-bound inference for every call, so anyone who
+can reach them can saturate the server, and the index endpoint, although it
+requires a token, writes to disk.
 
 Why these settings on 16 cores:
 
@@ -54,6 +62,8 @@ Why these settings on 16 cores:
 - `--reuse-port` lets the kernel spread incoming connections across workers;
   `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
   aware load balancer.
+- `ML_GATEWAY_INDEX_TOKEN` is the shared secret the index endpoint requires
+  (see the environment table below).
 - `HF_HUB_OFFLINE=1` forbids any Hugging Face Hub access, so the server never
   pulls model updates behind your back. Every model the server preloads must
   already be in the local cache, or startup fails with
@@ -64,8 +74,17 @@ Why these settings on 16 cores:
 For development, a single uvicorn process is sufficient:
 
 ```bash
-poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000
+ML_GATEWAY_INDEX_TOKEN=dev poetry run uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ML_GATEWAY_INDEX_TOKEN` | unset | Shared secret for `POST /index/attack-biencoder`, sent by the client as `Authorization: Bearer <token>`. While unset the endpoint refuses every call with `503`; a wrong or missing token gets `401`. The read endpoints never require it. Give the same value to Vulnerability-Lookup as `ML_GATEWAY_TOKEN`. |
+| `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
+| `ML_GATEWAY_INDEX_DIR` | `./index` | Directory of the on-disk vector index, one sub-directory per model. Must be the same for the server and the CLI. |
+| `HF_HUB_OFFLINE` | unset | Set to `1` to forbid Hugging Face Hub access; every model must then be cached first with `ml-gw-cli refresh-all`. |
 
 Deployment is straightforward—no configuration files or databases are required.
 Inference with the pre-trained models runs efficiently without the need for a GPU.
@@ -203,13 +222,26 @@ was built with, and every request returns an `error` asking for a rebuild when
 the served model changes (delete the directory and index the corpus again).
 
 Index one or more descriptions (call once per record at ingest, and again
-whenever a description changes — re-sending an ID replaces its vector):
+whenever a description changes — re-sending an ID replaces its vector). This
+is the only endpoint that writes, so it requires the bearer token configured
+as `ML_GATEWAY_INDEX_TOKEN` and refuses calls past `ML_GATEWAY_INDEX_MAX_ITEMS`
+with `507`:
 
 ```bash
 curl -X 'POST' 'http://127.0.0.1:8000/index/attack-biencoder' \
+  -H 'Authorization: Bearer <ML_GATEWAY_INDEX_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{"items": [{"id": "CVE-2021-44077", "text": "Zoho ManageEngine ServiceDesk Plus before 11306 is vulnerable to unauthenticated remote code execution."}]}'
 {"indexed":1,"count":1,"model":"CIRCL/vulnerability-attack-technique-biencoder","model_revision":"fb2219fa308ef9b967374267363f9b834a775b17","error":null}
+```
+
+List the techniques the technique search can rank for (the trained vocabulary
+plus every other enterprise technique with a bundled ATT&CK text), so a client
+can offer a technique index without its own copy of the ATT&CK tables:
+
+```bash
+curl 'http://127.0.0.1:8000/retrieve/attack-biencoder/techniques'
+{"techniques":[{"technique":"T1001","name":"Data Obfuscation","in_vocabulary":false},…,{"technique":"T1190","name":"Exploit Public-Facing Application","in_vocabulary":true},…],"model":"CIRCL/vulnerability-attack-technique-biencoder","model_revision":"fb2219fa308ef9b967374267363f9b834a775b17","error":null}
 ```
 
 Rank indexed vulnerabilities for a technique. Scores are the training-time
@@ -237,8 +269,11 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 
 | Endpoint | Field | Description |
 |---|---|---|
-| `POST /index/attack-biencoder` | `items[].id`, `items[].text` | Identifier (no whitespace) and description to embed; up to 1000 items per call. |
+| `POST /index/attack-biencoder` | `Authorization` | `Bearer <ML_GATEWAY_INDEX_TOKEN>`; `401` if wrong, `503` while the gateway has no token configured. |
+| | `items[].id`, `items[].text` | Identifier (no whitespace) and description to embed; up to 1000 items per call. |
 | | `indexed`, `count` | Items upserted by this call; distinct IDs in the index afterwards. |
+| `GET /retrieve/attack-biencoder/techniques` | `model` | Query parameter. |
+| | `techniques[]` | `technique`, `name`, `in_vocabulary` for every technique the technique search can rank for, sorted by ID. |
 | `GET /retrieve/attack-biencoder/technique/{id}` | `top_k`, `model` | Query parameters; `top_k` defaults to 10 (max 1000). |
 | | `in_vocabulary` | `true` for the 53 techniques the model was trained on. |
 | | `results[].score` | `sigmoid(logit_scale · cosine + logit_bias)`, rounded to four decimals. |

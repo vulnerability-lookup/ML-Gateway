@@ -6,10 +6,15 @@ from typing import Any
 
 import numpy as np
 from cachetools import TTLCache, cached
+from fastapi import HTTPException, status
 from numpy.typing import NDArray
 
 from api.models.attack_model import technique_names
-from api.models.biencoder_model import AttackBiEncoder, get_biencoder_instance
+from api.models.biencoder_model import (
+    AttackBiEncoder,
+    get_biencoder_instance,
+    technique_texts,
+)
 from api.schemas import IndexRequest, RelatedRequest
 from api.store.vector_store import VectorStore
 
@@ -24,6 +29,11 @@ for a technique, and which vulnerabilities behave like this one.
 # be a persistent volume shared by every worker process.
 INDEX_DIR_ENV = "ML_GATEWAY_INDEX_DIR"
 _DEFAULT_INDEX_DIR = "index"
+# Ceiling on the number of distinct IDs the index endpoint may grow the
+# index to. Each ID costs about 1.5 KB on disk and in the page cache, so
+# this bounds what an ingesting client can make the gateway store.
+INDEX_MAX_ITEMS_ENV = "ML_GATEWAY_INDEX_MAX_ITEMS"
+_DEFAULT_INDEX_MAX_ITEMS = 5_000_000
 
 _stores: dict[str, VectorStore] = {}
 _stores_lock = Lock()
@@ -31,6 +41,10 @@ _stores_lock = Lock()
 
 def index_directory() -> Path:
     return Path(os.environ.get(INDEX_DIR_ENV, _DEFAULT_INDEX_DIR))
+
+
+def index_max_items() -> int:
+    return int(os.environ.get(INDEX_MAX_ITEMS_ENV, _DEFAULT_INDEX_MAX_ITEMS))
 
 
 def _store_directory(model_name: str) -> Path:
@@ -83,11 +97,49 @@ def index_vulnerabilities(request: IndexRequest) -> dict[str, Any]:
         encoder, store = _resolve(request.model)
     except ValueError as e:
         return _error(request.model, str(e), indexed=0, count=0)
+    # Only IDs not yet indexed grow the index; re-sending an indexed ID
+    # replaces its vector and is always allowed, so a full index can still
+    # be kept up to date.
+    new_ids = {item.id for item in request.items if not store.contains(item.id)}
+    ceiling = index_max_items()
+    if store.count + len(new_ids) > ceiling:
+        raise HTTPException(
+            status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+            detail=(
+                f"Index full: {store.count} IDs indexed, adding {len(new_ids)} would exceed "
+                f"{INDEX_MAX_ITEMS_ENV}={ceiling}."
+            ),
+        )
     vectors = encoder.embed_vulnerabilities([item.text for item in request.items])
     store.upsert([item.id for item in request.items], vectors)
     return {
         "indexed": len(request.items),
         "count": store.count,
+        "model": encoder.model_name,
+        "model_revision": encoder.revision,
+    }
+
+
+def list_techniques(model_name: str) -> dict[str, Any]:
+    """Every technique ``retrieve_by_technique`` can rank for, sorted by ID.
+
+    The trained vocabulary comes from the texts shipped with the weights,
+    the rest from the bundled STIX-derived text table; both are exactly the
+    sources ``AttackBiEncoder.technique_vector`` resolves from, so this list
+    and that lookup cannot disagree. Returns a dict shaped like
+    :class:`api.schemas.TechniqueListResponse`.
+    """
+    try:
+        encoder = get_biencoder_instance(model_name)
+    except ValueError as e:
+        return _error(model_name, str(e), techniques=[])
+    trained = set(encoder.trained_technique_texts)
+    names = technique_names()
+    return {
+        "techniques": [
+            {"technique": technique_id, "name": names.get(technique_id), "in_vocabulary": technique_id in trained}
+            for technique_id in sorted(trained | set(technique_texts()))
+        ],
         "model": encoder.model_name,
         "model_revision": encoder.revision,
     }

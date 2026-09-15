@@ -16,12 +16,15 @@ services:
     environment:
       - PYTHONUNBUFFERED=TRUE
       - ML_GATEWAY_INDEX_DIR=/home/basicuser/index
+      # Shared secret for POST /index/attack-biencoder; unset = indexing refused.
+      - ML_GATEWAY_INDEX_TOKEN=${ML_GATEWAY_INDEX_TOKEN:-}
     volumes:
       # Bi-encoder vector index; must survive restarts and be shared by
       # every worker process.
       - ml-gateway-index:/home/basicuser/index
     ports:
-      - "8000:8000"
+      # Localhost only: the gateway must not be reachable from the Internet.
+      - "127.0.0.1:8000:8000"
     networks:
       - gateway
     healthcheck:

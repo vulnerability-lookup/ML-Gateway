@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from api.schemas import (
     DEFAULT_BIENCODER_MODEL,
@@ -8,10 +8,13 @@ from api.schemas import (
     IndexResponse,
     RelatedRequest,
     RelatedResponse,
+    TechniqueListResponse,
     TechniqueRetrievalResponse,
 )
+from api.security import require_index_token
 from api.services.retrieval_service import (
     index_vulnerabilities,
+    list_techniques,
     retrieve_by_technique,
     retrieve_related,
 )
@@ -25,17 +28,44 @@ FastAPI runs the CPU-bound embedding and search in its threadpool.
 router = APIRouter()
 
 
-@router.post("/index/attack-biencoder", response_model=IndexResponse)
+@router.post(
+    "/index/attack-biencoder",
+    response_model=IndexResponse,
+    dependencies=[Depends(require_index_token)],
+    responses={
+        401: {"description": "Missing or invalid bearer token."},
+        503: {"description": "Indexing disabled: no ML_GATEWAY_INDEX_TOKEN configured."},
+        507: {"description": "Index full: ML_GATEWAY_INDEX_MAX_ITEMS would be exceeded."},
+    },
+)
 def index_endpoint(request: IndexRequest) -> dict[str, Any]:
     """Embed vulnerability descriptions and upsert them into the index.
 
-    Request body: ``{"items": [{"id": "CVE-…", "text": "…"}, …],
-    "model": "<optional-model-id>"}``. Call once per record at ingest and
-    again whenever a description changes; re-sending an ID replaces its
-    vector. Vectors are only comparable within one model revision, which
-    the response reports as ``model_revision``.
+    Requires ``Authorization: Bearer <ML_GATEWAY_INDEX_TOKEN>``. Request
+    body: ``{"items": [{"id": "CVE-…", "text": "…"}, …], "model":
+    "<optional-model-id>"}``. Call once per record at ingest and again
+    whenever a description changes; re-sending an ID replaces its vector.
+    Vectors are only comparable within one model revision, which the
+    response reports as ``model_revision``. The call is refused with 507
+    when adding the new IDs would push the index past
+    ``ML_GATEWAY_INDEX_MAX_ITEMS``.
     """
     return index_vulnerabilities(request)
+
+
+@router.get("/retrieve/attack-biencoder/techniques", response_model=TechniqueListResponse)
+def technique_list_endpoint(
+    model: str = Query(default=DEFAULT_BIENCODER_MODEL),
+) -> dict[str, Any]:
+    """List every technique the technique-retrieval endpoint can rank for.
+
+    The bi-encoder's trained vocabulary is reported with
+    ``in_vocabulary: true``; the other enterprise techniques are scored
+    from their official ATT&CK text and rank noticeably worse. Sorted by
+    technique ID. Lets a client build a technique index without shipping
+    its own copy of the ATT&CK tables.
+    """
+    return list_techniques(model)
 
 
 @router.get(
