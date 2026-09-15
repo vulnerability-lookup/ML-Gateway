@@ -21,6 +21,10 @@ poetry run ml-gw-cli refresh-all
 # Refresh a specific model
 poetry run ml-gw-cli refresh-model --model-name "CIRCL/vulnerability-severity-classification-RoBERTa-base"
 
+# Fill the bi-encoder index from Vulnerability-Lookup NDJSON dumps / an .npz of vectors
+poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/
+poetry run ml-gw-cli import-index --file vectors.npz
+
 # Type checking
 poetry run mypy api/
 
@@ -39,6 +43,7 @@ The `api/` package follows a layered architecture:
 - **Services** (`services/classification_service.py`, `services/retrieval_service.py`) — Business logic. Selects model, formats output. The retrieval service also owns the per-model vector store (opened lazily under `ML_GATEWAY_INDEX_DIR`, default `./index`).
 - **Models** (`models/severity_model.py`, `models/attack_model.py`, `models/biencoder_model.py`) — `SeverityClassifier`, `AttackTechniqueClassifier` and `AttackBiEncoder` wrap Hugging Face transformers. Models are lazy-loaded and cached in per-module in-memory `_model_cache` dicts keyed by model name. The `LABELS` dict is the severity model registry mapping model names to their label sets; the attack classifier reads labels from the model config's `id2label` and gates loadable repos through the `ATTACK_MODELS` allow-list; the bi-encoder reads its scoring constants from the config's `biencoder` block and is gated by `BIENCODER_MODELS`. `api/data/attack_technique_names.json` maps technique IDs to official ATT&CK names; `api/data/attack_technique_texts.json` holds the `"Name. Description"` text per active enterprise technique (built from the MITRE STIX bundle, markup stripped) used to embed techniques outside the bi-encoder's trained vocabulary.
 - **Store** (`store/vector_store.py`) — `VectorStore`: append-only float16 matrix + ID list on disk, memory-mapped and shared by all worker processes, brute-force cosine search, advisory file lock for writers, pinned to one model revision via `meta.json`.
+- **Backfill** (`backfill.py`) — dump record extraction per feed layout, the batch backfill loop and the `.npz` import used by the `backfill-index` / `import-index` CLI commands.
 - **Schemas** (`schemas.py`) — Pydantic request/response models. Default model is `CIRCL/vulnerability-severity-classification-RoBERTa-base`.
 
 The bi-encoder scoring contract (mean pooling, per-side truncation lengths, `sigmoid(logit_scale · cos + logit_bias)`) comes from VulnTrain's `docs/attack-biencoder-retrieval.md` and must be reproduced exactly.

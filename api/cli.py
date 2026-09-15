@@ -1,11 +1,16 @@
+from pathlib import Path
+
 import typer
 from huggingface_hub import hf_hub_download
 from huggingface_hub.utils import RepositoryNotFoundError
 from transformers import AutoModel, AutoModelForSequenceClassification, AutoTokenizer
 
+from api.backfill import BackfillReport, backfill, import_vectors
 from api.models.attack_model import ATTACK_MODELS
-from api.models.biencoder_model import BIENCODER_MODELS
+from api.models.biencoder_model import BIENCODER_MODELS, get_biencoder_instance
 from api.models.severity_model import LABELS
+from api.schemas import DEFAULT_BIENCODER_MODEL
+from api.services.retrieval_service import get_store
 
 app = typer.Typer(help="Utility CLI for managing NLP models.")
 
@@ -55,6 +60,72 @@ def refresh_all():
         _refresh(model_name)
 
     typer.echo("All models refreshed.")
+
+
+@app.command()
+def backfill_index(
+    dumps: list[Path] = typer.Option(
+        ...,
+        "--dumps",
+        help="Vulnerability-Lookup NDJSON dump file or directory (repeatable; .gz accepted).",
+    ),
+    model: str = typer.Option(DEFAULT_BIENCODER_MODEL, help="Bi-encoder whose index to fill."),
+    batch_size: int = typer.Option(64, min=1, help="Descriptions embedded per model call."),
+    skip_existing: bool = typer.Option(
+        False, help="Leave IDs already in the index alone (resume an interrupted run)."
+    ),
+    limit: int | None = typer.Option(None, min=1, help="Stop after this many indexed records."),
+) -> None:
+    """
+    Embed every description in the dumps into the bi-encoder index.
+
+    Safe to run while the server is up. One ID is indexed at most once per
+    run (first occurrence wins; directories are read in sorted order, so
+    cvelistv5 precedes fkie_nvd and nvd). The index is read from
+    $ML_GATEWAY_INDEX_DIR (default ./index), like the server.
+    """
+    encoder = get_biencoder_instance(model)
+    store = get_store(encoder)
+    typer.echo(f"Index: {store.directory} ({store.count} IDs, revision {encoder.revision})")
+
+    def progress(report: BackfillReport) -> None:
+        typer.echo(f"{report.records} records read, {report.indexed} indexed…")
+
+    report = backfill(
+        encoder,
+        store,
+        dumps,
+        batch_size=batch_size,
+        skip_existing=skip_existing,
+        limit=limit,
+        progress=progress,
+    )
+    typer.echo(report.summary())
+    typer.echo(f"Index now holds {store.count} IDs.")
+
+
+@app.command()
+def import_index(
+    file: Path = typer.Option(
+        ..., exists=True, dir_okay=False, help="An .npz with ids, embeddings and model_revision."
+    ),
+    model: str = typer.Option(DEFAULT_BIENCODER_MODEL, help="Bi-encoder whose index to fill."),
+) -> None:
+    """
+    Import vectors computed elsewhere (e.g. on a GPU host) into the index.
+
+    The archive's model_revision must equal the served model's revision.
+    The index is read from $ML_GATEWAY_INDEX_DIR (default ./index), like
+    the server.
+    """
+    encoder = get_biencoder_instance(model)
+    store = get_store(encoder)
+    try:
+        imported = import_vectors(store, file, encoder.model_name, encoder.revision)
+    except ValueError as e:
+        typer.echo(f"Import refused: {e}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"Imported {imported} vectors; index now holds {store.count} IDs.")
 
 
 if __name__ == "__main__":

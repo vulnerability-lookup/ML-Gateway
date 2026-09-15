@@ -160,6 +160,11 @@ class VectorStore:
             self._refresh()
             return int(self._active.sum())
 
+    def contains(self, id_: str) -> bool:
+        with self._lock:
+            self._refresh()
+            return id_ in self._row_of
+
     def get(self, id_: str) -> NDArray[np.float32] | None:
         """Return the live vector stored for ``id_``, or ``None``."""
         with self._lock:

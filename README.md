@@ -207,6 +207,34 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 | | `results[].score` | Plain cosine, rounded to four decimals. |
 | all | `model` / `model_revision` / `error` | Same provenance and error semantics as `/classify/severity`. |
 
+#### Filling the index
+
+Vulnerability-Lookup sends every new or updated description to the index
+endpoint at ingest. The existing corpus is loaded once, on the gateway host,
+from the NDJSON dumps Vulnerability-Lookup publishes (`bin/dump.py`, one file
+per feed). The command reads plain or gzipped dumps, recognizes the CVE JSON 5,
+NVD API, OSV, CSAF, JVNDB and VARIoT layouts, indexes each ID once (first
+occurrence wins; a directory is read in sorted order, so `cvelistv5` precedes
+`fkie_nvd` and `nvd`), and is safe to run while the server is up. Expect a few
+hours for a corpus of several hundred thousand descriptions on a multi-core
+CPU; `--skip-existing` resumes an interrupted run.
+
+```bash
+HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
+  poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/ --batch-size 64
+```
+
+Vectors computed elsewhere (a GPU host running the reference snippet from
+VulnTrain's `attack-biencoder-retrieval` page) are imported from one `.npz`
+archive with `ids` (array of strings), `embeddings` (float16, N × 768, already
+L2-normalized) and `model_revision`. The import refuses an archive whose
+revision differs from the served model.
+
+```bash
+HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
+  poetry run ml-gw-cli import-index --file vectors.npz
+```
+
 ### Integration with Vulnerability-Lookup
 
 The HTML frontend templates of Vulnerability-Lookup use asynchronous JavaScript

@@ -34,6 +34,18 @@ New feature: ATT&CK retrieval with the bi-encoder.
   for every active enterprise ATT&CK technique (STIX bundle v19.1, markup
   stripped), identical to the model's shipped texts for the 53 trained
   techniques.
+- Two CLI commands fill the index in bulk, both safe to run while the
+  server is up:
+  - `ml-gw-cli backfill-index --dumps <file-or-dir>…` reads
+    Vulnerability-Lookup's NDJSON feed dumps (plain or gzipped; CVE JSON 5,
+    NVD API, OSV, CSAF, JVNDB and VARIoT layouts), embeds each description
+    on the gateway host in length-sorted batches, indexes each ID once and
+    prints a per-feed report; `--skip-existing` resumes an interrupted
+    run, `--limit` caps it.
+  - `ml-gw-cli import-index --file vectors.npz` imports vectors computed
+    elsewhere (`ids`, `embeddings`, `model_revision`), refusing an archive
+    whose revision differs from the served model or whose vectors are not
+    L2-normalized.
 - `ml-gw-cli refresh-all` now iterates over the model registries (so the
   bi-encoder and its `technique_texts.json` are cached at build time)
   instead of a hard-coded list.
