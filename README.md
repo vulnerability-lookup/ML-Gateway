@@ -144,6 +144,69 @@ Response fields:
 | `model` / `model_revision` / `error` | | Same provenance and error semantics as `/classify/severity`. |
 
 
+### ATT&CK retrieval with the bi-encoder
+
+[CIRCL/vulnerability-attack-technique-biencoder](https://huggingface.co/CIRCL/vulnerability-attack-technique-biencoder)
+embeds vulnerability descriptions and ATT&CK technique texts in one vector
+space, which answers two questions the classification head cannot: *which
+vulnerabilities for this technique* and *which vulnerabilities behave like
+this one*. The gateway owns the vectors and the search; clients such as
+Vulnerability-Lookup only send descriptions and render the answers. Only the
+vulnerability → technique direction has measured accuracy, so present both
+searches as similarity aids, not classifications.
+
+The index lives on disk under `ML_GATEWAY_INDEX_DIR` (default `./index`, one
+sub-directory per model). It must be a persistent volume shared by every
+worker process: the float16 matrix is memory-mapped, so gunicorn workers share
+one copy through the page cache and see each other's appends. Vectors are only
+comparable within one model revision; the directory records the revision it
+was built with, and every request returns an `error` asking for a rebuild when
+the served model changes (delete the directory and index the corpus again).
+
+Index one or more descriptions (call once per record at ingest, and again
+whenever a description changes — re-sending an ID replaces its vector):
+
+```bash
+curl -X 'POST' 'http://127.0.0.1:8000/index/attack-biencoder' \
+  -H 'Content-Type: application/json' \
+  -d '{"items": [{"id": "CVE-2021-44077", "text": "Zoho ManageEngine ServiceDesk Plus before 11306 is vulnerable to unauthenticated remote code execution."}]}'
+{"indexed":1,"count":1,"model":"CIRCL/vulnerability-attack-technique-biencoder","model_revision":"fb2219fa308ef9b967374267363f9b834a775b17","error":null}
+```
+
+Rank indexed vulnerabilities for a technique. Scores are the training-time
+probability `sigmoid(logit_scale · cosine + logit_bias)`, so a vulnerability's
+score for a technique here equals what the vulnerability → technique direction
+gives it. Techniques the model was not trained on are embedded from their
+official ATT&CK text and reported with `in_vocabulary: false`; they rank
+noticeably worse and interfaces should flag them.
+
+```bash
+curl 'http://127.0.0.1:8000/retrieve/attack-biencoder/technique/T1190?top_k=3'
+{"technique":"T1190","name":"Exploit Public-Facing Application","in_vocabulary":true,"results":[{"id":"CVE-2021-44077","score":0.7556}],"model":"CIRCL/vulnerability-attack-technique-biencoder","model_revision":"fb2219fa308ef9b967374267363f9b834a775b17","error":null}
+```
+
+Find the vulnerabilities nearest to one vulnerability, by plain cosine. Pass
+either the `id` of an indexed vulnerability (excluded from its own results) or
+a free `text`:
+
+```bash
+curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
+  -H 'Content-Type: application/json' \
+  -d '{"id": "CVE-2021-44077", "top_k": 3}'
+{"results":[{"id":"CVE-2017-0144","score":0.3841}],"model":"CIRCL/vulnerability-attack-technique-biencoder","model_revision":"fb2219fa308ef9b967374267363f9b834a775b17","error":null}
+```
+
+| Endpoint | Field | Description |
+|---|---|---|
+| `POST /index/attack-biencoder` | `items[].id`, `items[].text` | Identifier (no whitespace) and description to embed; up to 1000 items per call. |
+| | `indexed`, `count` | Items upserted by this call; distinct IDs in the index afterwards. |
+| `GET /retrieve/attack-biencoder/technique/{id}` | `top_k`, `model` | Query parameters; `top_k` defaults to 10 (max 1000). |
+| | `in_vocabulary` | `true` for the 53 techniques the model was trained on. |
+| | `results[].score` | `sigmoid(logit_scale · cosine + logit_bias)`, rounded to four decimals. |
+| `POST /retrieve/attack-biencoder/related` | `id` *or* `text` | Exactly one; plus optional `top_k` and `model`. |
+| | `results[].score` | Plain cosine, rounded to four decimals. |
+| all | `model` / `model_revision` / `error` | Same provenance and error semantics as `/classify/severity`. |
+
 ### Integration with Vulnerability-Lookup
 
 The HTML frontend templates of Vulnerability-Lookup use asynchronous JavaScript

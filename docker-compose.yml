@@ -15,6 +15,11 @@ services:
         GID: ${HOST_GID:-1000}
     environment:
       - PYTHONUNBUFFERED=TRUE
+      - ML_GATEWAY_INDEX_DIR=/home/basicuser/index
+    volumes:
+      # Bi-encoder vector index; must survive restarts and be shared by
+      # every worker process.
+      - ml-gateway-index:/home/basicuser/index
     ports:
       - "8000:8000"
     networks:
@@ -39,3 +44,6 @@ services:
 
 networks:
   gateway:
+
+volumes:
+  ml-gateway-index:

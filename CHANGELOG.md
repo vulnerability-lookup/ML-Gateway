@@ -1,6 +1,47 @@
 # Changelog
 
 
+## Unreleased
+
+New feature: ATT&CK retrieval with the bi-encoder.
+
+- Three new endpoints backed by
+  `CIRCL/vulnerability-attack-technique-biencoder`, following VulnTrain's
+  `attack-biencoder-retrieval` contract:
+  - `POST /index/attack-biencoder` embeds vulnerability descriptions and
+    upserts one vector per ID into an on-disk index.
+  - `GET /retrieve/attack-biencoder/technique/{id}` ranks indexed
+    vulnerabilities for a technique by the training-time probability
+    `sigmoid(logit_scale · cosine + logit_bias)`; techniques outside the
+    trained vocabulary are embedded from their official ATT&CK text and
+    flagged `in_vocabulary: false`.
+  - `POST /retrieve/attack-biencoder/related` returns the nearest indexed
+    vulnerabilities to an indexed ID or a free text, by plain cosine.
+  All responses carry the same `model` / `model_revision` / `error` fields
+  as the classification endpoints.
+- New `AttackBiEncoder` wrapper reproducing the scoring function exactly:
+  mean pooling over the attention mask, L2 normalization, 512-token
+  vulnerability texts and `technique_max_length` technique texts, affine
+  constants and trained technique texts read from the model release.
+- New `VectorStore`: an append-only float16 matrix and ID list on disk,
+  memory-mapped so all gunicorn workers share one copy and see each
+  other's appends, brute-force cosine search, advisory file lock for
+  writers, torn-write repair, and a `meta.json` pinning the index to one
+  model revision (requests report an error asking for a rebuild when the
+  served model changes). Location: `ML_GATEWAY_INDEX_DIR` (default
+  `./index`); docker-compose mounts a named volume for it.
+- Bundled `api/data/attack_technique_texts.json`: `"Name. Description"`
+  for every active enterprise ATT&CK technique (STIX bundle v19.1, markup
+  stripped), identical to the model's shipped texts for the 53 trained
+  techniques.
+- `ml-gw-cli refresh-all` now iterates over the model registries (so the
+  bi-encoder and its `technique_texts.json` are cached at build time)
+  instead of a hard-coded list.
+- `numpy` and `huggingface-hub` are declared as direct dependencies.
+- New test suites for the vector store and the retrieval endpoints
+  (stubbed encoder, real store in a temporary directory).
+
+
 ## Release 1.4.0 (2026-08-30)
 
 Fix for long inputs crashing inference, plus documentation and
