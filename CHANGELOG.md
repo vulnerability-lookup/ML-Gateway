@@ -42,10 +42,14 @@ New feature: ATT&CK retrieval with the bi-encoder.
     on the gateway host in length-sorted batches, indexes each ID once and
     prints a per-feed report; `--skip-existing` resumes an interrupted
     run, `--limit` caps it.
-  - `ml-gw-cli import-index --file vectors.npz` imports vectors computed
-    elsewhere (`ids`, `embeddings`, `model_revision`), refusing an archive
-    whose revision differs from the served model or whose vectors are not
-    L2-normalized.
+  - `ml-gw-cli embed-dumps --dumps … --output vectors.npz --device cuda`
+    runs the same extraction on a GPU host and writes the vectors to an
+    `.npz` archive (`ids`, float16 `embeddings`, `model`,
+    `model_revision`) instead of an index. `AttackBiEncoder` accepts a
+    torch device for this; the server keeps using the CPU.
+  - `ml-gw-cli import-index --file vectors.npz` imports such an archive,
+    refusing one whose revision differs from the served model or whose
+    vectors are not L2-normalized.
 - `ml-gw-cli refresh-all` now iterates over the model registries (so the
   bi-encoder and its `technique_texts.json` are cached at build time)
   instead of a hard-coded list.

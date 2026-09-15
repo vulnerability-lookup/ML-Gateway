@@ -219,3 +219,35 @@ def test_import_requires_the_contract_keys(tmp_path: Path, store: VectorStore) -
     np.savez(archive, ids=np.array(["CVE-1"]), embeddings=np.eye(DIM, dtype=np.float16)[:1])
     with pytest.raises(ValueError, match="model_revision"):
         import_vectors(store, archive, MODEL, REVISION)
+
+
+def test_embed_dumps_writes_an_importable_archive(tmp_path: Path, store: VectorStore) -> None:
+    from api.backfill import embed_dumps
+
+    dump = write_ndjson(tmp_path / "feed.ndjson", [CVE5, FKIE, OSV, "{broken"])
+    encoder = StubBiEncoder()
+    output = tmp_path / "vectors.npz"
+
+    report = embed_dumps(encoder, [dump], output, batch_size=1)  # type: ignore[arg-type]
+    assert (report.records, report.indexed, report.duplicates, report.malformed) == (4, 2, 1, 1)
+    with np.load(output) as archive:
+        assert sorted(archive["ids"]) == ["CVE-1999-0001", "GHSA-2222-76gx-28mm"]
+        assert archive["embeddings"].dtype == np.float16
+        assert archive["embeddings"].shape == (2, DIM)
+        assert str(archive["model"]) == MODEL
+        assert str(archive["model_revision"]) == REVISION
+
+    assert import_vectors(store, output, MODEL, REVISION) == 2
+    cve5_text = CVE5["containers"]["cna"]["descriptions"][1]["value"]  # type: ignore[index]
+    assert np.allclose(store.get("CVE-1999-0001"), encoder.embed_vulnerabilities([cve5_text])[0])
+
+
+def test_embed_dumps_with_nothing_usable(tmp_path: Path) -> None:
+    from api.backfill import embed_dumps
+
+    dump = write_ndjson(tmp_path / "feed.ndjson", [{"id": "X"}])
+    output = tmp_path / "vectors.npz"
+    report = embed_dumps(StubBiEncoder(), [dump], output)  # type: ignore[arg-type]
+    assert report.indexed == 0
+    with np.load(output) as archive:
+        assert archive["embeddings"].shape == (0, DIM)

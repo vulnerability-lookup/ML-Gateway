@@ -224,13 +224,22 @@ HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
   poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/ --batch-size 64
 ```
 
-Vectors computed elsewhere (a GPU host running the reference snippet from
-VulnTrain's `attack-biencoder-retrieval` page) are imported from one `.npz`
-archive with `ids` (array of strings), `embeddings` (float16, N × 768, already
-L2-normalized) and `model_revision`. The import refuses an archive whose
-revision differs from the served model.
+When the gateway host is too slow for that, embed on a GPU host instead and
+ship the vectors. `embed-dumps` runs the same extraction there (clone this
+repository and `poetry install`; no index is needed) and writes one `.npz`
+archive with `ids`, float16 `embeddings`, `model` and `model_revision`; the
+gateway imports it with `import-index`, which refuses an archive whose revision
+differs from the served model. Both hosts must have the same model revision
+cached, so run `ml-gw-cli refresh-all` on both at the same time. The archive
+can also be produced with the reference snippet from VulnTrain's
+`attack-biencoder-retrieval` page, as long as it carries those keys and the
+vectors are L2-normalized.
 
 ```bash
+# On the GPU host
+poetry run ml-gw-cli embed-dumps --dumps /path/to/dumps/ --output vectors.npz --device cuda
+
+# On the gateway host
 HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
   poetry run ml-gw-cli import-index --file vectors.npz
 ```

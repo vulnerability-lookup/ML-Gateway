@@ -56,10 +56,15 @@ class AttackBiEncoder:
         dimension: Size of the embedding vectors.
     """
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, device: str | None = None):
+        """``device`` is a torch device string (``"cuda"``, ``"cpu"``); the
+        server keeps the default CPU, the bulk embedding CLI may pass a GPU."""
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
+        if device is not None:
+            self.model.to(device)
+        self.device = next(self.model.parameters()).device
         self.model.eval()  # Disable dropout etc.
         clamp_tokenizer_max_length(self.tokenizer, self.model.config)
         # See SeverityClassifier for the caveat about ``_commit_hash`` being
@@ -130,12 +135,12 @@ class AttackBiEncoder:
                 truncation=True,
                 max_length=max_length,
                 return_tensors="pt",
-            )
+            ).to(self.device)
             with torch.no_grad():
                 hidden = self.model(**batch).last_hidden_state
             mask = batch["attention_mask"].unsqueeze(-1).to(hidden.dtype)
             pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
-            chunks.append(torch.nn.functional.normalize(pooled, dim=1))
+            chunks.append(torch.nn.functional.normalize(pooled, dim=1).cpu())
         return torch.cat(chunks).numpy().astype(np.float32)
 
     def embed_vulnerabilities(self, descriptions: list[str]) -> NDArray[np.float32]:

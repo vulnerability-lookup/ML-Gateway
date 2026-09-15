@@ -240,6 +240,62 @@ def backfill(
     return report
 
 
+def embed_dumps(
+    encoder: AttackBiEncoder,
+    paths: Iterable[Path],
+    output: Path,
+    batch_size: int = 64,
+    limit: int | None = None,
+    progress: Callable[[BackfillReport], None] | None = None,
+    progress_every: int = 1000,
+) -> BackfillReport:
+    """Embed the dumps into one ``.npz`` for :func:`import_vectors`.
+
+    The counterpart of :func:`backfill` for a host that has a GPU but no
+    index: same extraction, same batching, but the vectors go to an
+    archive (``ids``, float16 ``embeddings``, ``model`` and
+    ``model_revision``) instead of the store. ``report.indexed`` counts the
+    vectors written.
+    """
+    ids: list[str] = []
+    vectors: list[NDArray[np.float32]] = []
+
+    class _Sink:
+        """The slice of the store interface ``backfill`` writes to."""
+
+        dimension = encoder.dimension
+
+        def contains(self, id_: str) -> bool:
+            return False
+
+        def upsert(self, batch_ids: list[str], batch_vectors: NDArray[np.float32]) -> None:
+            ids.extend(batch_ids)
+            vectors.append(batch_vectors)
+
+    report = backfill(
+        encoder,
+        _Sink(),  # type: ignore[arg-type]
+        paths,
+        batch_size=batch_size,
+        limit=limit,
+        progress=progress,
+        progress_every=progress_every,
+    )
+    embeddings = (
+        np.concatenate(vectors).astype(np.float16)
+        if vectors
+        else np.zeros((0, encoder.dimension), dtype=np.float16)
+    )
+    np.savez(
+        output,
+        ids=np.array(ids),
+        embeddings=embeddings,
+        model=encoder.model_name,
+        model_revision=encoder.revision or "",
+    )
+    return report
+
+
 def _scalar(value: NDArray[Any]) -> str:
     return str(np.asarray(value).reshape(-1)[0])
 
