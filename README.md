@@ -155,6 +155,39 @@ Vulnerability-Lookup only send descriptions and render the answers. Only the
 vulnerability → technique direction has measured accuracy, so present both
 searches as similarity aids, not classifications.
 
+```mermaid
+flowchart LR
+    classDef data fill:#e8f0fe,stroke:#4285f4,color:#000;
+    classDef tool fill:#fff4e5,stroke:#f9a825,color:#000;
+    classDef out fill:#e6f4ea,stroke:#188038,color:#000;
+
+    subgraph VL["Vulnerability-Lookup"]
+        direction TB
+        ingest["Feeder ingest<br/>new or changed description"]:::data
+        techpage["Technique page<br/>«vulnerabilities for this technique»"]:::data
+        vulnpage["Vulnerability page<br/>«related by attack behaviour»"]:::data
+    end
+
+    subgraph GW["ML-Gateway"]
+        direction TB
+        idx["POST /index/attack-biencoder"]:::tool
+        tech["GET /retrieve/attack-biencoder/technique/{id}"]:::tool
+        rel["POST /retrieve/attack-biencoder/related"]:::tool
+        enc["Bi-encoder<br/>CIRCL/vulnerability-attack-technique-biencoder<br/>mean-pool · L2-normalize"]:::tool
+        store[("Vector store<br/>float16 matrix, memory-mapped,<br/>shared by all workers,<br/>pinned to one model revision")]:::out
+    end
+
+    ingest -- "{id, text}" --> idx
+    techpage -- "T1190" --> tech
+    vulnpage -- "{id} or {text}" --> rel
+    idx -- embed --> enc
+    enc -- upsert vector --> store
+    tech -- "sigmoid(scale·cos + bias)" --> store
+    rel -- "plain cosine" --> store
+    tech -. "ranked ids + scores" .-> techpage
+    rel -. "ranked ids + scores" .-> vulnpage
+```
+
 The index lives on disk under `ML_GATEWAY_INDEX_DIR` (default `./index`, one
 sub-directory per model). It must be a persistent volume shared by every
 worker process: the float16 matrix is memory-mapped, so gunicorn workers share
@@ -213,6 +246,33 @@ Vulnerability-Lookup sends every new or updated description to the index
 endpoint at ingest, so the index only has to be seeded once with the existing
 corpus. That seed is read from the NDJSON dumps Vulnerability-Lookup publishes
 and can be embedded either on the gateway host or on a faster GPU host.
+
+```mermaid
+flowchart LR
+    classDef data fill:#e8f0fe,stroke:#4285f4,color:#000;
+    classDef tool fill:#fff4e5,stroke:#f9a825,color:#000;
+    classDef out fill:#e6f4ea,stroke:#188038,color:#000;
+
+    dumps["Vulnerability-Lookup dumps<br/>one .ndjson per feed<br/>(cvelistv5, github, pysec, …)"]:::data
+
+    subgraph gpu["GPU host (optional)"]
+        direction LR
+        embed["ml-gw-cli embed-dumps --device cuda<br/>same extraction, no index"]:::tool
+        npz["vectors.npz<br/>ids · float16 embeddings<br/>model · model_revision"]:::data
+    end
+
+    subgraph gateway["Gateway host"]
+        direction TB
+        backfill["ml-gw-cli backfill-index<br/>extract → embed on CPU → upsert"]:::tool
+        imp["ml-gw-cli import-index<br/>refuses another model revision"]:::tool
+        server["Running server<br/>POST /index/attack-biencoder at ingest"]:::tool
+        store[("Vector store<br/>$ML_GATEWAY_INDEX_DIR<br/>appends visible to every worker")]:::out
+    end
+
+    dumps -- "path A: one-time seed" --> backfill --> store
+    dumps -- "path B: one-time seed" --> embed --> npz -- copy --> imp --> store
+    server -- "keeps it current" --> store
+```
 
 **1. Download the dumps.** A Vulnerability-Lookup instance publishes one plain
 `.ndjson` file per feed, regenerated daily, for example at
