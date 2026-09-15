@@ -1,4 +1,5 @@
 import json
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -88,12 +89,14 @@ class AttackBiEncoder:
         self.dimension = int(self.model.config.hidden_size)
 
         self.trained_technique_texts = self._load_trained_technique_texts()
+        # Filled by ``warm_up``: no forward pass runs in ``__init__``. The
+        # server loads models in the gunicorn master before forking, and a
+        # torch forward pass there initializes OpenMP's thread pool, which
+        # the forked workers inherit in a broken state: their first
+        # inference hangs and spins at full CPU. Inference must only start
+        # in the process that serves requests.
         self._technique_vectors: dict[str, NDArray[np.float32]] = {}
-        vectors = self.embed_techniques(
-            [self.trained_technique_texts[technique] for technique in self.labels]
-        )
-        for technique, vector in zip(self.labels, vectors):
-            self._technique_vectors[technique] = vector
+        self._warm_up_lock = threading.Lock()
 
     def _load_trained_technique_texts(self) -> dict[str, str]:
         """Read the ``technique_texts.json`` shipped next to the weights."""
@@ -149,6 +152,22 @@ class AttackBiEncoder:
     def embed_techniques(self, texts: list[str]) -> NDArray[np.float32]:
         return self.embed(texts, self.technique_max_length)
 
+    def warm_up(self) -> None:
+        """Embed the trained technique texts once, in the current process.
+
+        Called from the FastAPI lifespan, i.e. in each worker after the
+        fork, and lazily by :meth:`technique_vector` for any other caller
+        (the CLI, tests). Idempotent.
+        """
+        with self._warm_up_lock:
+            if all(technique in self._technique_vectors for technique in self.labels):
+                return
+            vectors = self.embed_techniques(
+                [self.trained_technique_texts[technique] for technique in self.labels]
+            )
+            for technique, vector in zip(self.labels, vectors):
+                self._technique_vectors[technique] = vector
+
     def technique_vector(
         self, technique_id: str
     ) -> tuple[NDArray[np.float32], bool] | None:
@@ -160,9 +179,12 @@ class AttackBiEncoder:
         the paper measures label-holdout recall@5 at 0.12 for those, so
         interfaces should present them as such.
         """
+        if technique_id in self.trained_technique_texts:
+            self.warm_up()
+            return self._technique_vectors[technique_id], True
         vector = self._technique_vectors.get(technique_id)
         if vector is not None:
-            return vector, technique_id in self.trained_technique_texts
+            return vector, False
         text = technique_texts().get(technique_id)
         if text is None:
             return None
@@ -194,12 +216,19 @@ def get_biencoder_instance(model_name: str) -> AttackBiEncoder:
     return _model_cache[model_name]
 
 
+def loaded_models() -> list[AttackBiEncoder]:
+    """The bi-encoders currently held in the in-memory cache."""
+    return list(_model_cache.values())
+
+
 def preload_models() -> None:
     """Load every model in ``BIENCODER_MODELS`` into the in-memory cache.
 
     Called at import time so that running gunicorn with ``--preload``
-    populates the cache (weights and the trained technique vectors) in the
-    master process; forked workers then share them via copy-on-write.
+    populates the cache in the master process; forked workers then share
+    the weights via copy-on-write. Only weights are loaded here: the
+    technique vectors are computed by :meth:`AttackBiEncoder.warm_up` in
+    each worker (see the note in ``__init__``).
     """
     for model_name in BIENCODER_MODELS:
         get_biencoder_instance(model_name)

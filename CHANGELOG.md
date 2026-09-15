@@ -25,6 +25,11 @@ server started with `HF_HUB_OFFLINE=1`, otherwise startup fails with
     vulnerabilities to an indexed ID or a free text, by plain cosine.
   All responses carry the same `model` / `model_revision` / `error` fields
   as the classification endpoints.
+- No inference runs in the gunicorn master any more. The bi-encoder's
+  technique vectors are computed by `AttackBiEncoder.warm_up()` in the
+  FastAPI lifespan, i.e. in each worker after the fork: a torch forward
+  pass before the fork left the workers with a broken OpenMP thread pool
+  whose first inference hung and spun at full CPU.
 - New `AttackBiEncoder` wrapper reproducing the scoring function exactly:
   mean pooling over the attention mask, L2 normalization, 512-token
   vulnerability texts and `technique_max_length` technique texts, affine
