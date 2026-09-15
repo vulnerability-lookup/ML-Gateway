@@ -210,39 +210,78 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 #### Filling the index
 
 Vulnerability-Lookup sends every new or updated description to the index
-endpoint at ingest. The existing corpus is loaded once, on the gateway host,
-from the NDJSON dumps Vulnerability-Lookup publishes (`bin/dump.py`, one file
-per feed). The command reads plain or gzipped dumps, recognizes the CVE JSON 5,
-NVD API, OSV, CSAF, JVNDB and VARIoT layouts, indexes each ID once (first
-occurrence wins; a directory is read in sorted order, so `cvelistv5` precedes
-`fkie_nvd` and `nvd`), and is safe to run while the server is up. Expect a few
-hours for a corpus of several hundred thousand descriptions on a multi-core
-CPU; `--skip-existing` resumes an interrupted run.
+endpoint at ingest, so the index only has to be seeded once with the existing
+corpus. That seed is read from the NDJSON dumps Vulnerability-Lookup publishes
+and can be embedded either on the gateway host or on a faster GPU host.
+
+**1. Download the dumps.** A Vulnerability-Lookup instance publishes one plain
+`.ndjson` file per feed, regenerated daily, for example at
+<https://vulnerability.circl.lu/dumps/>. There is no archive to unpack: fetch
+the feeds you want into one directory. `cvelistv5.ndjson` alone is several GB.
+
+```bash
+mkdir -p /var/lib/ml-gateway/dumps && cd /var/lib/ml-gateway/dumps
+for feed in cvelistv5 github pysec jvndb; do
+  curl -fLO --retry 3 "https://vulnerability.circl.lu/dumps/${feed}.ndjson"
+done
+```
+
+Which feeds to take:
+
+- `cvelistv5` is the CVE corpus. Leave `nvd` and `fkie_nvd` out of the first
+  pass: they carry the same CVEs, so almost every record would be a duplicate
+  that is read and discarded. Add them later with `--skip-existing` to pick
+  up the few CVEs that `cvelistv5` lacks.
+- `github`, `pysec`, `jvndb` and `variot` add non-CVE advisories.
+- The `csaf_*` feeds are large and their summaries are advisory topics rather
+  than vulnerability descriptions; add them only if you want advisories to
+  show up in the related-vulnerabilities search.
+- `comments`, `bundles`, `sightings` and `kev_entries` are not vulnerability
+  feeds and are skipped automatically if they sit in the directory.
+- Files may be gzipped (`.ndjson.gz`) to save disk space.
+
+**2a. Embed on the gateway host.** `backfill-index` reads the dumps,
+recognizes the CVE JSON 5, NVD API, OSV, CSAF, JVNDB and VARIoT layouts,
+indexes each ID once (first occurrence wins; a directory is read in sorted
+order, so `cvelistv5` precedes `fkie_nvd` and `nvd`) and prints a per-feed
+report. It is safe to run while the server is up. Expect a few hours for
+several hundred thousand descriptions on a multi-core server CPU, so run it
+under `tmux` or `nohup`; `--skip-existing` resumes an interrupted run and
+`--limit` is handy for a first try.
 
 ```bash
 HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
-  poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/ --batch-size 64
+  poetry run ml-gw-cli backfill-index --dumps /var/lib/ml-gateway/dumps/ --batch-size 64
 ```
 
-When the gateway host is too slow for that, embed on a GPU host instead and
-ship the vectors. `embed-dumps` runs the same extraction there (clone this
-repository and `poetry install`; no index is needed) and writes one `.npz`
-archive with `ids`, float16 `embeddings`, `model` and `model_revision`; the
-gateway imports it with `import-index`, which refuses an archive whose revision
-differs from the served model. Both hosts must have the same model revision
-cached, so run `ml-gw-cli refresh-all` on both at the same time. The archive
-can also be produced with the reference snippet from VulnTrain's
-`attack-biencoder-retrieval` page, as long as it carries those keys and the
-vectors are L2-normalized.
+**2b. Or embed on a GPU host and ship the vectors.** `embed-dumps` runs the
+same extraction and deduplication without touching any index, and writes one
+`.npz` archive (`ids`, float16 `embeddings`, `model`, `model_revision`; about
+1.5 KB per vulnerability). Clone this repository on the GPU host, install it,
+cache the model, then embed:
 
 ```bash
-# On the GPU host
+git clone https://github.com/vulnerability-lookup/ML-Gateway && cd ML-Gateway
+poetry install
+poetry run ml-gw-cli refresh-model --model-name CIRCL/vulnerability-attack-technique-biencoder
 poetry run ml-gw-cli embed-dumps --dumps /path/to/dumps/ --output vectors.npz --device cuda
+```
 
-# On the gateway host
+Copy `vectors.npz` to the gateway host and import it. The import refuses an
+archive whose model revision differs from the served model, so both hosts must
+have the same revision cached: refresh the model on both on the same day. The
+archive can also be produced with the reference snippet from VulnTrain's
+`attack-biencoder-retrieval` page, as long as it carries the keys above and
+the vectors are L2-normalized.
+
+```bash
 HF_HUB_OFFLINE=1 ML_GATEWAY_INDEX_DIR=/var/lib/ml-gateway/index \
   poetry run ml-gw-cli import-index --file vectors.npz
 ```
+
+**3. Rebuilding.** Vectors are only comparable within one model revision.
+When the served model changes, delete the index directory and seed it again
+with either path.
 
 ### Integration with Vulnerability-Lookup
 
