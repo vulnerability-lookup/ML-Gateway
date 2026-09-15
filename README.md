@@ -54,6 +54,12 @@ Why these settings on 16 cores:
 - `--reuse-port` lets the kernel spread incoming connections across workers;
   `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
   aware load balancer.
+- `HF_HUB_OFFLINE=1` forbids any Hugging Face Hub access, so the server never
+  pulls model updates behind your back. Every model the server preloads must
+  already be in the local cache, or startup fails with
+  `LocalEntryNotFoundError`. Run `poetry run ml-gw-cli refresh-all` once
+  after installing and **after every upgrade that adds a model**, then start
+  the server.
 
 For development, a single uvicorn process is sufficient:
 

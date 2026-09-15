@@ -5,6 +5,12 @@
 
 New feature: ATT&CK retrieval with the bi-encoder.
 
+**Upgrade note:** the server now preloads a new model,
+`CIRCL/vulnerability-attack-technique-biencoder`. Run
+`poetry run ml-gw-cli refresh-all` (online) once before restarting a
+server started with `HF_HUB_OFFLINE=1`, otherwise startup fails with
+`LocalEntryNotFoundError`.
+
 - Three new endpoints backed by
   `CIRCL/vulnerability-attack-technique-biencoder`, following VulnTrain's
   `attack-biencoder-retrieval` contract:
