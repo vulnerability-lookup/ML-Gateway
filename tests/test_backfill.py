@@ -116,9 +116,15 @@ def test_resolve_dump_paths_and_iteration(tmp_path: Path) -> None:
         resolve_dump_paths([tmp_path / "missing.ndjson"])
 
 
+def stored(store: VectorStore, id_: str) -> NDArray[np.float32]:
+    vector = store.get(id_)
+    assert vector is not None, f"{id_} is not indexed"
+    return vector
+
+
 class StubBiEncoder:
     model_name = MODEL
-    revision = REVISION
+    revision: str | None = REVISION
     dimension = DIM
 
     def __init__(self) -> None:
@@ -160,7 +166,7 @@ def test_backfill_indexes_first_occurrence_and_batches(tmp_path: Path, store: Ve
     cve5_text = CVE5["containers"]["cna"]["descriptions"][1]["value"]  # type: ignore[index]
     expected = np.zeros(DIM, dtype=np.float32)
     expected[len(cve5_text) % DIM] = 1.0
-    assert np.allclose(store.get("CVE-1999-0001"), expected)
+    assert np.allclose(stored(store, "CVE-1999-0001"), expected)
     assert "indexed: 3" in report.summary()
 
 
@@ -228,7 +234,7 @@ def test_embed_dumps_writes_an_importable_archive(tmp_path: Path, store: VectorS
     encoder = StubBiEncoder()
     output = tmp_path / "vectors.npz"
 
-    report = embed_dumps(encoder, [dump], output, batch_size=1)  # type: ignore[arg-type]
+    report = embed_dumps(encoder, [dump], output, batch_size=1)
     assert (report.records, report.indexed, report.duplicates, report.malformed) == (4, 2, 1, 1)
     with np.load(output) as archive:
         assert sorted(archive["ids"]) == ["CVE-1999-0001", "GHSA-2222-76gx-28mm"]
@@ -239,7 +245,7 @@ def test_embed_dumps_writes_an_importable_archive(tmp_path: Path, store: VectorS
 
     assert import_vectors(store, output, MODEL, REVISION) == 2
     cve5_text = CVE5["containers"]["cna"]["descriptions"][1]["value"]  # type: ignore[index]
-    assert np.allclose(store.get("CVE-1999-0001"), encoder.embed_vulnerabilities([cve5_text])[0])
+    assert np.allclose(stored(store, "CVE-1999-0001"), encoder.embed_vulnerabilities([cve5_text])[0])
 
 
 def test_embed_dumps_with_nothing_usable(tmp_path: Path) -> None:
@@ -247,7 +253,7 @@ def test_embed_dumps_with_nothing_usable(tmp_path: Path) -> None:
 
     dump = write_ndjson(tmp_path / "feed.ndjson", [{"id": "X"}])
     output = tmp_path / "vectors.npz"
-    report = embed_dumps(StubBiEncoder(), [dump], output)  # type: ignore[arg-type]
+    report = embed_dumps(StubBiEncoder(), [dump], output)
     assert report.indexed == 0
     with np.load(output) as archive:
         assert archive["embeddings"].shape == (0, DIM)

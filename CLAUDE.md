@@ -27,7 +27,7 @@ poetry run ml-gw-cli embed-dumps --dumps /path/to/dumps/ --output vectors.npz --
 poetry run ml-gw-cli import-index --file vectors.npz
 
 # Type checking
-poetry run mypy api/
+poetry run mypy api/ tests/
 
 # Run the test suite (stubs the model layer; no model downloads)
 poetry run pytest

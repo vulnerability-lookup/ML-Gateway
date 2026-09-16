@@ -3,13 +3,10 @@ import json
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
-
-from api.models.biencoder_model import AttackBiEncoder
-from api.store.vector_store import VectorStore
 
 """
 Bulk population of the bi-encoder index, for the ``ml-gw-cli`` commands.
@@ -21,6 +18,28 @@ computed elsewhere (a GPU box running the reference snippet) shipped as one
 ``.npz`` file. Both are safe to run while the server is up — the store's
 file lock serializes the appends and the workers pick them up.
 """
+
+class Embedder(Protocol):
+    """What the backfill needs from an encoder (``AttackBiEncoder`` in
+    production, a stub in the tests)."""
+
+    model_name: str
+    revision: str | None
+    dimension: int
+
+    def embed_vulnerabilities(self, descriptions: list[str]) -> NDArray[np.float32]: ...
+
+
+class VectorSink(Protocol):
+    """What the backfill writes to (``VectorStore``, or the in-memory
+    collector behind :func:`embed_dumps`)."""
+
+    dimension: int
+
+    def contains(self, id_: str) -> bool: ...
+
+    def upsert(self, ids: list[str], vectors: NDArray[np.float32]) -> None: ...
+
 
 # Per-line metadata the dump writer adds next to the raw record.
 _META_PREFIX = "vulnerability-lookup:"
@@ -177,8 +196,8 @@ class BackfillReport:
 
 
 def backfill(
-    encoder: AttackBiEncoder,
-    store: VectorStore,
+    encoder: Embedder,
+    store: VectorSink,
     paths: Iterable[Path],
     batch_size: int = 64,
     skip_existing: bool = False,
@@ -241,7 +260,7 @@ def backfill(
 
 
 def embed_dumps(
-    encoder: AttackBiEncoder,
+    encoder: Embedder,
     paths: Iterable[Path],
     output: Path,
     batch_size: int = 64,
@@ -274,7 +293,7 @@ def embed_dumps(
 
     report = backfill(
         encoder,
-        _Sink(),  # type: ignore[arg-type]
+        _Sink(),
         paths,
         batch_size=batch_size,
         limit=limit,
@@ -301,7 +320,7 @@ def _scalar(value: NDArray[Any]) -> str:
 
 
 def import_vectors(
-    store: VectorStore,
+    store: VectorSink,
     path: Path,
     model: str,
     model_revision: str | None,

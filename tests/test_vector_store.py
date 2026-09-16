@@ -60,7 +60,9 @@ def test_upsert_supersedes_previous_row(tmp_path: Path) -> None:
     assert max(score for _, score in store.search(unit(1, 0, 0, 0), top_k=5)) < 0.5
     # The new one wins on the z axis.
     assert store.search(unit(0, 0, 1, 0), top_k=1)[0][0] == "a"
-    assert np.allclose(store.get("a"), unit(0, 0, 1, 0), atol=1e-3)
+    vector = store.get("a")
+    assert vector is not None
+    assert np.allclose(vector, unit(0, 0, 1, 0), atol=1e-3)
 
 
 def test_exclude_id(tmp_path: Path) -> None:
