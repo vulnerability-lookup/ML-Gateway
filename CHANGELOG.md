@@ -36,6 +36,10 @@ server started with `HF_HUB_OFFLINE=1`, otherwise startup fails with
 - The README's production example binds `127.0.0.1` and explains why the
   gateway must not be public; docker-compose publishes the port on
   localhost only.
+- README reorganised: capabilities overview, endpoints-at-a-glance and
+  supported-models tables, model cache and Docker sections, environment
+  variables, live example outputs, and a dedicated section on seeding
+  the retrieval index.
 - No inference runs in the gunicorn master any more. The bi-encoder's
   technique vectors are computed by `AttackBiEncoder.warm_up()` in the
   FastAPI lifespan, i.e. in each worker after the fork: a torch forward
