@@ -36,3 +36,4 @@ eproject.cfg
 
 index/
 dumps/
+.env

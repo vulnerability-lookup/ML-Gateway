@@ -75,8 +75,25 @@ Why these settings on 16 cores:
   `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
   aware load balancer.
 - `ML_GATEWAY_INDEX_TOKEN` is the shared secret the index endpoint requires.
-  Keep it in a file only the service user can read (an `EnvironmentFile` under
-  systemd, a `.env` file for docker compose) rather than on the command line.
+  Any long random string works; generate one once and give the same value to
+  Vulnerability-Lookup as `ML_GATEWAY_TOKEN`:
+
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  Keep it in a file only the service user can read rather than on the command
+  line, where it would land in the shell history. For example, sourced before
+  starting the server by hand:
+
+  ```bash
+  install -m 600 /dev/null ~/ML-Gateway/.env
+  echo "ML_GATEWAY_INDEX_TOKEN=$(openssl rand -hex 32)" > ~/ML-Gateway/.env
+  set -a; . ~/ML-Gateway/.env; set +a
+  ```
+
+  Under systemd, point `EnvironmentFile=` at that file; with docker compose,
+  the same file next to `docker-compose.yml` is read automatically.
 - `HF_HUB_OFFLINE=1` forbids any Hugging Face Hub access, so the server never
   pulls model updates behind your back. See the next section.
 
