@@ -55,8 +55,9 @@ poetry run gunicorn api.main:app \
   --reuse-port --proxy-protocol
 ```
 
-Bind the gateway to localhost or a private interface that only
-Vulnerability-Lookup can reach, never to a public address: the read endpoints
+Make the gateway reachable only from the platform --- bound to localhost or
+a private interface, or behind a proxy that only Vulnerability-Lookup can
+reach --- never exposed on a public address: the read endpoints
 are unauthenticated and run CPU-bound inference for every call, so anyone who
 can reach them can saturate the server, and the index endpoint, although it
 requires a token, writes to disk.
