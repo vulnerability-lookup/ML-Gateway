@@ -17,8 +17,12 @@ call with 503 until the operator sets one.
 INDEX_TOKEN_ENV = "ML_GATEWAY_INDEX_TOKEN"
 
 
-def require_index_token(authorization: str | None = Header(default=None)) -> None:
-    """FastAPI dependency: ``Authorization: Bearer <ML_GATEWAY_INDEX_TOKEN>``."""
+async def require_index_token(authorization: str | None = Header(default=None)) -> None:
+    """FastAPI dependency: ``Authorization: Bearer <ML_GATEWAY_INDEX_TOKEN>``.
+
+    ``async`` so it runs in the event loop rather than costing a threadpool
+    hop per request; it only compares strings.
+    """
     expected = os.environ.get(INDEX_TOKEN_ENV, "")
     if not expected:
         raise HTTPException(

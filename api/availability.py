@@ -32,8 +32,12 @@ def disabled_endpoints() -> set[str]:
     return {_normalise(item) for item in raw.split(",") if item.strip()}
 
 
-def require_enabled(request: Request) -> None:
-    """FastAPI dependency: refuse routes listed in ``ML_GATEWAY_DISABLED_ENDPOINTS``."""
+async def require_enabled(request: Request) -> None:
+    """FastAPI dependency: refuse routes listed in ``ML_GATEWAY_DISABLED_ENDPOINTS``.
+
+    ``async`` so FastAPI evaluates it in the event loop: a sync dependency
+    would cost a threadpool hop on every request, refused ones included.
+    """
     route = request.scope.get("route")
     template = getattr(route, "path", request.url.path)
     if _normalise(template) in disabled_endpoints():
