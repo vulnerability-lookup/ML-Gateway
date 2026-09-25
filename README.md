@@ -75,6 +75,15 @@ Why these settings on 16 cores:
 - `--reuse-port` lets the kernel spread incoming connections across workers;
   `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
   aware load balancer.
+- Every endpoint that runs a model goes through a per-worker gate: at most
+  `ML_GATEWAY_INFERENCE_CONCURRENCY` (default 1) calls run at once and at most
+  `ML_GATEWAY_INFERENCE_QUEUE` (default 32) wait for a slot; the next call is
+  refused immediately with `503` and a `Retry-After` header. With the defaults
+  a request waits a few seconds at most, and a client that overruns the
+  gateway (a bulk re-enrichment, say) sees `503`s to back off on instead of
+  a server that stops answering while its cores burn through an unbounded
+  backlog. Size the queue for the latency you can accept: roughly
+  `queue × 0.5 s` per worker for full-length descriptions.
 - `ML_GATEWAY_INDEX_TOKEN` is the shared secret the index endpoint requires.
   Any long random string works; generate one once and give the same value to
   Vulnerability-Lookup as `ML_GATEWAY_TOKEN`:
@@ -128,6 +137,8 @@ the `model_revision` field of every response tells you which one is served.
 |---|---|---|
 | `ML_GATEWAY_INDEX_TOKEN` | unset | Shared secret for `POST /index/attack-biencoder`, sent by the client as `Authorization: Bearer <token>`. While unset the endpoint refuses every call with `503`; a wrong or missing token gets `401`. The read endpoints never require it. Give the same value to Vulnerability-Lookup as `ML_GATEWAY_TOKEN`. |
 | `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
+| `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
+| `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
 | `ML_GATEWAY_INDEX_DIR` | `./index` | Directory of the on-disk retrieval index, one sub-directory per model. Relative to the working directory, so start the server and the CLI from the same place or set an absolute path for both. |
 | `HF_HUB_OFFLINE` | unset | Set to `1` to forbid Hugging Face Hub access; every model must then be cached first with `ml-gw-cli refresh-all`. |
 
@@ -356,6 +367,7 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 
 | Endpoint | Field | Description |
 |---|---|---|
+| every endpoint that runs a model | `503` + `Retry-After` | The worker's inference queue (`ML_GATEWAY_INFERENCE_QUEUE`) is full; retry after the given number of seconds. `GET /` and `GET /retrieve/attack-biencoder/techniques` are never refused. |
 | `POST /index/attack-biencoder` | `Authorization` | `Bearer <ML_GATEWAY_INDEX_TOKEN>`; `401` if wrong, `503` while the gateway has no token configured. |
 | | `items[].id`, `items[].text` | Identifier (no whitespace, at most 256 characters) and description to embed; up to 1000 items per call. |
 | | `indexed`, `count` | Items upserted by this call; distinct IDs in the index afterwards. |

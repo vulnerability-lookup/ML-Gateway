@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from numpy.typing import NDArray
 from api import security
 from api.routers.retrieval_router import router
 from api.services import retrieval_service
+from api.throttle import INFERENCE_GATE
 
 """
 End-to-end tests for the bi-encoder retrieval endpoints.
@@ -355,3 +357,25 @@ def test_technique_text_table() -> None:
     assert texts["T1190"].startswith("Exploit Public-Facing Application. ")
     assert "(Citation:" not in texts["T1190"]
     assert all("." in text for text in texts.values())
+
+
+def test_technique_list_answers_while_the_inference_queue_is_full(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Simulate a worker with every slot taken and the queue full: the read
+    # that runs no model still answers, every embedding or search call is
+    # refused.
+    monkeypatch.setattr(INFERENCE_GATE, "_semaphore", asyncio.Semaphore(0))
+    monkeypatch.setattr(INFERENCE_GATE, "waiting", INFERENCE_GATE.queue)
+    assert client.get("/retrieve/attack-biencoder/techniques").status_code == 200
+    for refused in (
+        client.get("/retrieve/attack-biencoder/technique/T1190"),
+        client.post("/retrieve/attack-biencoder/related", json={"text": "x"}),
+        client.post(
+            "/index/attack-biencoder",
+            json={"items": [{"id": "CVE-1", "text": "x"}]},
+            headers={"Authorization": f"Bearer {INDEX_TOKEN}"},
+        ),
+    ):
+        assert refused.status_code == 503
+        assert refused.headers["Retry-After"] == "1"

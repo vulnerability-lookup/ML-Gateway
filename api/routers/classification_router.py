@@ -12,6 +12,7 @@ from api.services.classification_service import (
     classify_attack_techniques,
     classify_severity,
 )
+from api.throttle import INFERENCE_GATE, OVERLOADED_RESPONSE
 
 """
 This module sets up the API route(s) using FastAPI's APIRouter.
@@ -26,13 +27,14 @@ async def root() -> str:
     return "OK"
 
 
-# The classification endpoints are plain ``def``, not ``async def``: FastAPI
-# then runs them in its threadpool, so the synchronous CPU-bound torch
-# inference cannot block the event loop for every other request.
+# The classification endpoints hand their synchronous, CPU-bound torch
+# inference to the inference gate, which runs it in a thread (so the event
+# loop stays free) and refuses the call with 503 once the per-worker queue
+# is full (see ``api.throttle``).
 
 
-@router.post("/classify/severity", response_model=SeverityResponse)
-def severity_classification_endpoint(
+@router.post("/classify/severity", response_model=SeverityResponse, responses=OVERLOADED_RESPONSE)
+async def severity_classification_endpoint(
     request: SeverityRequest,
 ) -> dict[str, Any]:
     """Classify a vulnerability description's severity.
@@ -44,11 +46,13 @@ def severity_classification_endpoint(
     the loaded snapshot (``model``, ``model_revision``), so callers can pin
     and audit which exact weights produced the result.
     """
-    return classify_severity(request)
+    return await INFERENCE_GATE.run(classify_severity, request)
 
 
-@router.post("/classify/attack-techniques", response_model=AttackTechniquesResponse)
-def attack_techniques_endpoint(
+@router.post(
+    "/classify/attack-techniques", response_model=AttackTechniquesResponse, responses=OVERLOADED_RESPONSE
+)
+async def attack_techniques_endpoint(
     request: AttackTechniquesRequest,
 ) -> dict[str, Any]:
     """Rank MITRE ATT&CK techniques for a vulnerability description.
@@ -62,4 +66,4 @@ def attack_techniques_endpoint(
     clears the 0.5 prediction threshold. The response also carries the model
     identifier and Hugging Face snapshot SHA, like ``/classify/severity``.
     """
-    return classify_attack_techniques(request)
+    return await INFERENCE_GATE.run(classify_attack_techniques, request)

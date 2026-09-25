@@ -3,7 +3,18 @@
 
 ## Unreleased
 
-New feature: ATT&CK retrieval with the bi-encoder.
+New feature: ATT&CK retrieval with the bi-encoder. Load shedding on the
+inference endpoints.
+
+- Every endpoint that runs a model now goes through a per-worker inference
+  gate: `ML_GATEWAY_INFERENCE_CONCURRENCY` (default 1) calls run at once,
+  `ML_GATEWAY_INFERENCE_QUEUE` (default 32) wait, and the next call is refused
+  at once with `503` and `Retry-After: 1`. Previously an overrunning client
+  piled up in the request threadpool, every in-flight call spawned its own
+  OpenMP threads, and the gateway stopped answering (2026-09-25 outage: 175
+  queued requests, 184 threads and four saturated cores per worker).
+- `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
+  answer even while the queue is full.
 
 **Upgrade note:** the server now preloads a new model,
 `CIRCL/vulnerability-attack-technique-biencoder`. Run
