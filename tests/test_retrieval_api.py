@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from api import security
 from api.routers.retrieval_router import router
 from api.services import retrieval_service
+from api.availability import DISABLED_ENDPOINTS_ENV
 from api.throttle import INFERENCE_GATE
 
 """
@@ -379,3 +380,22 @@ def test_technique_list_answers_while_the_inference_queue_is_full(
     ):
         assert refused.status_code == 503
         assert refused.headers["Retry-After"] == "1"
+
+
+def test_disabled_retrieval_endpoints(
+    client: TestClient, encoder: StubBiEncoder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(
+        DISABLED_ENDPOINTS_ENV,
+        "/retrieve/attack-biencoder/technique/{id},/retrieve/attack-biencoder/related",
+    )
+    for refused in (
+        client.get("/retrieve/attack-biencoder/technique/T1190"),
+        client.post("/retrieve/attack-biencoder/related", json={"text": "x"}),
+    ):
+        assert refused.status_code == 503
+        assert "is disabled on this gateway" in refused.json()["detail"]
+    assert encoder.embed_calls == 0
+    # The list and the index endpoint are untouched.
+    assert client.get("/retrieve/attack-biencoder/techniques").status_code == 200
+    assert index(client, ("CVE-1", "sql injection"))["indexed"] == 1

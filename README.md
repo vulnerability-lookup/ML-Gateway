@@ -139,6 +139,7 @@ the `model_revision` field of every response tells you which one is served.
 | `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
 | `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
 | `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
+| `ML_GATEWAY_DISABLED_ENDPOINTS` | unset | Comma-separated route paths to take out of service, as written in the endpoint tables (`/classify/attack-techniques`, `/retrieve/attack-biencoder/technique/{id}`, `/retrieve/attack-biencoder/related`, …). A call to a listed endpoint is refused with `503` before any model or the inference queue is involved, and without `Retry-After`. Useful to shed a whole feature under load. |
 | `ML_GATEWAY_INDEX_DIR` | `./index` | Directory of the on-disk retrieval index, one sub-directory per model. Relative to the working directory, so start the server and the CLI from the same place or set an absolute path for both. |
 | `HF_HUB_OFFLINE` | unset | Set to `1` to forbid Hugging Face Hub access; every model must then be cached first with `ml-gw-cli refresh-all`. |
 
@@ -367,6 +368,7 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 
 | Endpoint | Field | Description |
 |---|---|---|
+| any endpoint listed in `ML_GATEWAY_DISABLED_ENDPOINTS` | `503`, no `Retry-After` | Disabled by the operator; the detail names the route. Lasts until the gateway restarts without the entry. |
 | every endpoint that runs a model | `503` + `Retry-After` | The worker's inference queue (`ML_GATEWAY_INFERENCE_QUEUE`) is full; retry after the given number of seconds. `GET /` and `GET /retrieve/attack-biencoder/techniques` are never refused. |
 | `POST /index/attack-biencoder` | `Authorization` | `Bearer <ML_GATEWAY_INDEX_TOKEN>`; `401` if wrong, `503` while the gateway has no token configured. |
 | | `items[].id`, `items[].text` | Identifier (no whitespace, at most 256 characters) and description to embed; up to 1000 items per call. |

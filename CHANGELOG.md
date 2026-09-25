@@ -15,6 +15,9 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- `ML_GATEWAY_DISABLED_ENDPOINTS` takes the listed endpoints out of service:
+  a call is refused with `503` (no `Retry-After`) before any model runs, so
+  an operator can shed a whole feature under load.
 
 **Upgrade note:** the server now preloads a new model,
 `CIRCL/vulnerability-attack-technique-biencoder`. Run

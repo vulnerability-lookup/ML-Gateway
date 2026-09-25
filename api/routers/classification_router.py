@@ -1,6 +1,8 @@
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from api.availability import require_enabled
 
 from api.schemas import (
     AttackTechniquesRequest,
@@ -19,7 +21,8 @@ This module sets up the API route(s) using FastAPI's APIRouter.
 We define the request schema with Pydantic and the endpoint function:
 """
 
-router = APIRouter()
+# Every route can be taken out of service with ML_GATEWAY_DISABLED_ENDPOINTS.
+router = APIRouter(dependencies=[Depends(require_enabled)])
 
 
 @router.get("/")

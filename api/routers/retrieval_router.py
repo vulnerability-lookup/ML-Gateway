@@ -2,6 +2,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query
 
+from api.availability import require_enabled
+
 from api.schemas import (
     DEFAULT_BIENCODER_MODEL,
     IndexRequest,
@@ -27,7 +29,8 @@ through the inference gate (a thread per call, 503 once the per-worker
 queue is full). The technique list runs no model and answers directly.
 """
 
-router = APIRouter()
+# Every route can be taken out of service with ML_GATEWAY_DISABLED_ENDPOINTS.
+router = APIRouter(dependencies=[Depends(require_enabled)])
 
 
 @router.post(
