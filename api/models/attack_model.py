@@ -6,6 +6,7 @@ from typing import TypedDict
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from api.models.quantization import quantize_linear_layers
 from api.models.tokenizer_utils import clamp_tokenizer_max_length
 
 """
@@ -67,10 +68,17 @@ class AttackTechniqueClassifier:
         # ``model.config._commit_hash`` during ``from_pretrained``; see
         # SeverityClassifier for the caveat about it being private API.
         self.revision: str | None = getattr(self.model.config, "_commit_hash", None)
+        self.quantized = False
         id_to_label = self.model.config.id2label
         self.labels: list[str] = [
             id_to_label[index] for index in sorted(id_to_label)
         ]
+
+    def quantize(self) -> None:
+        """Switch to dynamic int8 weights (see :mod:`api.models.quantization`). Idempotent."""
+        if not self.quantized:
+            self.model = quantize_linear_layers(self.model)
+            self.quantized = True
 
     def predict(self, description: str) -> list[RankedTechnique]:
         """Return every vocabulary technique ranked by sigmoid probability.
@@ -124,6 +132,11 @@ def get_attack_model_instance(model_name: str) -> AttackTechniqueClassifier:
             raise ValueError(f"Unknown model: {model_name}")
         _model_cache[model_name] = AttackTechniqueClassifier(model_name)
     return _model_cache[model_name]
+
+
+def loaded_models() -> list[AttackTechniqueClassifier]:
+    """Every classifier loaded so far, in load order."""
+    return list(_model_cache.values())
 
 
 def preload_models() -> None:

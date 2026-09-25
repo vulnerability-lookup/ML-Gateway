@@ -3,6 +3,7 @@ from typing import TypedDict
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from api.models.quantization import quantize_linear_layers
 from api.models.tokenizer_utils import clamp_tokenizer_max_length
 
 """
@@ -45,6 +46,13 @@ class SeverityClassifier:
         self.revision: str | None = getattr(
             self.model.config, "_commit_hash", None
         )
+        self.quantized = False
+
+    def quantize(self) -> None:
+        """Switch to dynamic int8 weights (see :mod:`api.models.quantization`). Idempotent."""
+        if not self.quantized:
+            self.model = quantize_linear_layers(self.model)
+            self.quantized = True
 
     def predict(self, description: str) -> "Prediction":
         inputs = self.tokenizer(
@@ -96,6 +104,11 @@ def get_model_instance(model_name: str) -> SeverityClassifier:
             raise ValueError(f"Unknown model: {model_name}")
         _model_cache[model_name] = SeverityClassifier(model_name, labels)
     return _model_cache[model_name]
+
+
+def loaded_models() -> list[SeverityClassifier]:
+    """Every classifier loaded so far, in load order."""
+    return list(_model_cache.values())
 
 
 def preload_models() -> None:

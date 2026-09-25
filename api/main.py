@@ -1,9 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
+from api.models.attack_model import AttackTechniqueClassifier
+from api.models.attack_model import loaded_models as loaded_attack_models
 from api.models.attack_model import preload_models as preload_attack_models
 from api.models.biencoder_model import loaded_models as loaded_biencoder_models
 from api.models.biencoder_model import preload_models as preload_biencoder_models
+from api.models.quantization import quantization_enabled
+from api.models.severity_model import SeverityClassifier
+from api.models.severity_model import loaded_models as loaded_severity_models
 from api.models.severity_model import preload_models
 from api.routers.classification_router import router as classification_router
 from api.routers.retrieval_router import router as retrieval_router
@@ -21,9 +26,17 @@ preload_biencoder_models()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Runs in each worker process, after the fork: the first forward passes
-    # (the bi-encoder's technique vectors) happen here, before requests are
-    # accepted.
+    # Runs in each worker process, after the fork: the first torch work
+    # (quantizing the classifiers, the bi-encoder's technique vectors)
+    # happens here, before requests are accepted.
+    if quantization_enabled():
+        classifiers: list[SeverityClassifier | AttackTechniqueClassifier] = [
+            *loaded_severity_models(),
+            *loaded_attack_models(),
+        ]
+        for classifier in classifiers:
+            classifier.quantize()
+        print(f"Quantized {len(classifiers)} classifiers to int8.", flush=True)
     for encoder in loaded_biencoder_models():
         encoder.warm_up()
     print("Models ready, accepting requests.", flush=True)

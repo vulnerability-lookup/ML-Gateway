@@ -51,6 +51,13 @@ class SeverityResponse(BaseModel):
             "path)."
         ),
     )
+    quantized: bool = Field(
+        default=False,
+        description=(
+            "True when the prediction came from the int8-quantized weights "
+            "(ML_GATEWAY_QUANTIZE), which can differ slightly from the fp32 revision."
+        ),
+    )
     error: str | None = Field(
         default=None,
         description=(
@@ -129,6 +136,13 @@ class AttackTechniquesResponse(BaseModel):
             "Hugging Face Hub. ``None`` when the snapshot does not carry "
             "revision metadata (for example, models loaded from a local "
             "path)."
+        ),
+    )
+    quantized: bool = Field(
+        default=False,
+        description=(
+            "True when the prediction came from the int8-quantized weights "
+            "(ML_GATEWAY_QUANTIZE), which can differ slightly from the fp32 revision."
         ),
     )
     error: str | None = Field(

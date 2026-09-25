@@ -16,6 +16,7 @@ Tests for the operator switch that takes endpoints out of service.
 class StubSeverityClassifier:
     model_name = "stub/severity-model"
     revision = "0123456789abcdef0123456789abcdef01234567"
+    quantized = False
 
     def __init__(self) -> None:
         self.calls = 0

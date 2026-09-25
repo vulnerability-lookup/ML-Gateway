@@ -62,6 +62,7 @@ def classify_severity(request: SeverityRequest) -> dict[str, Any]:
         "confidence": float(output.get("confidence", 0.0)),
         "model": classifier.model_name,
         "model_revision": classifier.revision,
+        "quantized": classifier.quantized,
     }
 
 
@@ -106,4 +107,5 @@ def classify_attack_techniques(request: AttackTechniquesRequest) -> dict[str, An
         "techniques": [technique.copy() for technique in ranking[: request.top_k]],
         "model": classifier.model_name,
         "model_revision": classifier.revision,
+        "quantized": classifier.quantized,
     }

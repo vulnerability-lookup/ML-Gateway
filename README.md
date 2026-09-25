@@ -146,9 +146,47 @@ the `model_revision` field of every response tells you which one is served.
 | `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
 | `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
 | `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
+| `ML_GATEWAY_QUANTIZE` | unset | Set to `1` to run the severity and attack-technique classifiers with dynamic int8 weights (each worker converts its copy after the fork). Roughly doubles throughput on CPU for typical descriptions at a small accuracy cost; responses then carry `quantized: true`. The bi-encoder is never quantized. See [Quantization](#quantization). |
 | `ML_GATEWAY_DISABLED_ENDPOINTS` | unset | Comma-separated route paths to take out of service, as written in the endpoint tables (`/classify/attack-techniques`, `/retrieve/attack-biencoder/technique/{id}`, `/retrieve/attack-biencoder/related`, …). A call to a listed endpoint is refused with `503` before any model or the inference queue is involved, and without `Retry-After`. Useful to shed a whole feature under load. |
 | `ML_GATEWAY_INDEX_DIR` | `./index` | Directory of the on-disk retrieval index, one sub-directory per model. Relative to the working directory, so start the server and the CLI from the same place or set an absolute path for both. |
 | `HF_HUB_OFFLINE` | unset | Set to `1` to forbid Hugging Face Hub access; every model must then be cached first with `ml-gw-cli refresh-all`. |
+
+### Quantization
+
+`ML_GATEWAY_QUANTIZE=1` converts every linear layer of the two RoBERTa
+classifiers to dynamic int8 (`torch.ao.quantization.quantize_dynamic`) in
+each worker after the fork. The bi-encoder is left in fp32 because its
+embeddings must reproduce the training-time contract bit for bit.
+
+Measured on 200 records of the `CIRCL/vulnerability-scores` test split
+(revision `4742a0f4` of the severity model, one request at a time, median
+description 60 tokens, 12-core desktop), accuracy against the CVSS v3
+severity bucket:
+
+| threads per call | fp32 | int8 |
+|---|---|---|
+| 4 | 6.1 req/s | 7.0 req/s |
+| 2 | 6.3 req/s | 13.4 req/s |
+| 1 | 4.2 req/s | 8.5 req/s |
+| accuracy | 0.845 | 0.850 |
+| agreement with fp32 | | 96.5 % of predictions, mean confidence shift 0.05 |
+
+The same picture with the whole server under load (gunicorn with
+`--preload`, 32 concurrent clients, 384 distinct real descriptions, same
+12-core desktop):
+
+| layout | fp32 | int8 |
+|---|---|---|
+| `-w 4`, `OMP_NUM_THREADS=4` | 4.6 req/s | 8.6 req/s |
+| `-w 6`, `OMP_NUM_THREADS=2` | 8.5 req/s | 9.4 req/s |
+
+Two lessons: int8 pays off with one or two threads per call, and fp32 gains
+nothing from a third and fourth thread on inputs this short. On a 16-core
+host that argues for more workers with fewer threads each, for example
+`-w 8` with `OMP_NUM_THREADS=2`, rather than the 4 × 4 layout above.
+Responses carry `quantized: true` so a prediction can be traced to the
+weights that produced it. Re-measure before enabling it for a new model
+revision: the accuracy cost is model dependent.
 
 ### Docker
 

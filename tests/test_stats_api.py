@@ -20,6 +20,7 @@ gate's counters, per worker.
 class StubSeverityClassifier:
     model_name = "stub/severity-model"
     revision = "0123456789abcdef0123456789abcdef01234567"
+    quantized = False
 
     def predict(self, description: str) -> dict[str, Any]:
         return {"severity": "Medium", "confidence": 0.7}

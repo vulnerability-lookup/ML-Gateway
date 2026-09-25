@@ -15,6 +15,10 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- `ML_GATEWAY_QUANTIZE=1` runs the severity and attack-technique classifiers
+  with dynamic int8 weights, converted in each worker after the fork; about
+  twice the throughput at one or two threads per call, responses carry
+  `quantized: true`. The bi-encoder is never quantized.
 - `GET /stats` reports, per worker, the hit and miss counts of the three
   result caches and the inference gate's limits, occupancy and served /
   refused counts, to tell repeated text from new work under load.

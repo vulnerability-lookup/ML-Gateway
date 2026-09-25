@@ -43,6 +43,7 @@ RANKING: list[dict[str, Any]] = [
 class StubSeverityClassifier:
     model_name = SEVERITY_MODEL
     revision = REVISION
+    quantized = False
 
     def __init__(self) -> None:
         self.calls = 0
@@ -55,6 +56,7 @@ class StubSeverityClassifier:
 class StubAttackClassifier:
     model_name = ATTACK_MODEL
     revision = REVISION
+    quantized = False
 
     def __init__(self) -> None:
         self.calls = 0
@@ -120,6 +122,7 @@ def test_severity_classification(
         "confidence": 0.9876,
         "model": SEVERITY_MODEL,
         "model_revision": REVISION,
+        "quantized": False,
         "error": None,
     }
 
