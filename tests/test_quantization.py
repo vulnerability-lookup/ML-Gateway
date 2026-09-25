@@ -1,7 +1,14 @@
 import pytest
 import torch
 
-from api.models.quantization import QUANTIZE_ENV, quantization_enabled, quantize_linear_layers
+from api.models.quantization import (
+    QUANTIZE_ENGINE_ENV,
+    QUANTIZE_ENV,
+    cpu_flags,
+    quantization_enabled,
+    quantize_linear_layers,
+    select_engine,
+)
 
 """
 Tests for the optional int8 quantization: the switch and the conversion
@@ -39,3 +46,19 @@ def test_linear_layers_become_int8_and_keep_their_outputs() -> None:
     with torch.no_grad():
         after = quantized(x)
     assert torch.allclose(before, after, atol=0.05)
+
+
+def test_engine_can_be_chosen_and_is_validated(monkeypatch: pytest.MonkeyPatch) -> None:
+    supported = torch.backends.quantized.supported_engines
+    monkeypatch.setenv(QUANTIZE_ENGINE_ENV, supported[-1].upper())
+    assert select_engine() == supported[-1]
+    assert torch.backends.quantized.engine == supported[-1]
+    monkeypatch.setenv(QUANTIZE_ENGINE_ENV, "abacus")
+    with pytest.raises(ValueError, match="ML_GATEWAY_QUANTIZE_ENGINE"):
+        select_engine()
+    monkeypatch.delenv(QUANTIZE_ENGINE_ENV)
+    assert select_engine() == torch.backends.quantized.engine
+
+
+def test_cpu_flags_are_vector_flags() -> None:
+    assert all(flag.startswith(("avx", "sse4", "fma", "amx")) for flag in cpu_flags())

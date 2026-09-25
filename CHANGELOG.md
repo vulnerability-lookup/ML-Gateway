@@ -19,6 +19,9 @@ inference endpoints.
   with dynamic int8 weights, converted in each worker after the fork; about
   twice the throughput at one or two threads per call, responses carry
   `quantized: true`. The bi-encoder is never quantized.
+  `ml-gw-cli check-quantization` verifies on a host that the int8 kernels run
+  there (they die with SIGILL on CPUs without the needed vector instructions);
+  `ML_GATEWAY_QUANTIZE_ENGINE` selects the kernels.
 - `GET /stats` reports, per worker, the hit and miss counts of the three
   result caches and the inference gate's limits, occupancy and served /
   refused counts, to tell repeated text from new work under load.

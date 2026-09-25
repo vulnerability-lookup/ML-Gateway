@@ -24,14 +24,46 @@ copy, about 160 MB per RoBERTa-base model.
 """
 
 QUANTIZE_ENV = "ML_GATEWAY_QUANTIZE"
+# Which int8 kernels to use: one of torch.backends.quantized.supported_engines
+# ("x86", "fbgemm", "onednn", "qnnpack"). Unset keeps torch's default choice.
+# The kernels use vector instructions the host must support: a worker whose
+# CPU lacks them dies with SIGILL on its first quantized forward pass, which
+# is why ``ml-gw-cli check-quantization`` exists.
+QUANTIZE_ENGINE_ENV = "ML_GATEWAY_QUANTIZE_ENGINE"
 
 
 def quantization_enabled() -> bool:
     return os.environ.get(QUANTIZE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def select_engine() -> str:
+    """Apply ``ML_GATEWAY_QUANTIZE_ENGINE`` if set and return the engine in use."""
+    requested = os.environ.get(QUANTIZE_ENGINE_ENV, "").strip().lower()
+    if requested:
+        supported = torch.backends.quantized.supported_engines
+        if requested not in supported:
+            raise ValueError(f"{QUANTIZE_ENGINE_ENV}={requested!r} is not one of {supported}")
+        torch.backends.quantized.engine = requested
+    engine: str = torch.backends.quantized.engine
+    return engine
+
+
+def cpu_flags() -> set[str]:
+    """The vector-instruction flags of this CPU (Linux), for the self-test's report."""
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("flags"):
+                    flags = line.split(":", 1)[1].split()
+                    return {flag for flag in flags if flag.startswith(("avx", "sse4", "fma", "amx"))}
+    except OSError:
+        pass
+    return set()
+
+
 def quantize_linear_layers(model: torch.nn.Module) -> torch.nn.Module:
     """Quantize every ``Linear`` of ``model`` to dynamic int8, in place."""
+    select_engine()
     with warnings.catch_warnings():
         # torch.ao.quantization is deprecated in favour of torchao, which
         # is not a dependency; the eager API still ships and works.

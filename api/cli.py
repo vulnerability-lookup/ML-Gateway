@@ -6,9 +6,10 @@ from huggingface_hub.utils import RepositoryNotFoundError
 from transformers import AutoModel, AutoModelForSequenceClassification, AutoTokenizer
 
 from api.backfill import BackfillReport, backfill, embed_dumps, import_vectors
-from api.models.attack_model import ATTACK_MODELS
+from api.models.attack_model import ATTACK_MODELS, get_attack_model_instance
 from api.models.biencoder_model import BIENCODER_MODELS, AttackBiEncoder, get_biencoder_instance
-from api.models.severity_model import LABELS
+from api.models.quantization import cpu_flags, select_engine
+from api.models.severity_model import LABELS, get_model_instance
 from api.schemas import DEFAULT_BIENCODER_MODEL
 from api.services.retrieval_service import get_store
 
@@ -60,6 +61,33 @@ def refresh_all():
         _refresh(model_name)
 
     typer.echo("All models refreshed.")
+
+
+@app.command("check-quantization")
+def check_quantization() -> None:
+    """
+    Quantize every classifier and run one forward pass, as the server would.
+
+    Run this on the host before setting ML_GATEWAY_QUANTIZE=1: the int8
+    kernels use vector instructions the CPU must support, and a process
+    that lacks them dies with "Illegal instruction" (SIGILL). Better this
+    command than every worker.
+    """
+    import time
+
+    sample = "Zoho ManageEngine ServiceDesk Plus before 11306 allows unauthenticated remote code execution."
+    typer.echo(f"Quantization engine: {select_engine()}; CPU flags: {' '.join(sorted(cpu_flags())) or 'unknown'}")
+    for model_name in [*LABELS, *ATTACK_MODELS]:
+        classifier = get_model_instance(model_name) if model_name in LABELS else get_attack_model_instance(model_name)
+        started = time.perf_counter()
+        classifier.predict(sample)
+        fp32_ms = (time.perf_counter() - started) * 1000
+        classifier.quantize()
+        started = time.perf_counter()
+        classifier.predict(sample)
+        int8_ms = (time.perf_counter() - started) * 1000
+        typer.echo(f"{model_name}: fp32 {fp32_ms:.0f} ms, int8 {int8_ms:.0f} ms, no illegal instruction.")
+    typer.echo("Quantization works on this host.")
 
 
 @app.command()

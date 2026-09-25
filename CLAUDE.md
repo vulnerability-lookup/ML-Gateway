@@ -26,6 +26,9 @@ poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/
 poetry run ml-gw-cli embed-dumps --dumps /path/to/dumps/ --output vectors.npz --device cuda  # on a GPU host
 poetry run ml-gw-cli import-index --file vectors.npz
 
+# Check that int8 quantization runs on this CPU before setting ML_GATEWAY_QUANTIZE=1
+poetry run ml-gw-cli check-quantization
+
 # Type checking
 poetry run mypy api/ tests/
 

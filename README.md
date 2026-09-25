@@ -147,6 +147,7 @@ the `model_revision` field of every response tells you which one is served.
 | `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
 | `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
 | `ML_GATEWAY_QUANTIZE` | unset | Set to `1` to run the severity and attack-technique classifiers with dynamic int8 weights (each worker converts its copy after the fork). Roughly doubles throughput on CPU for typical descriptions at a small accuracy cost; responses then carry `quantized: true`. The bi-encoder is never quantized. See [Quantization](#quantization). |
+| `ML_GATEWAY_QUANTIZE_ENGINE` | unset | Which int8 kernels to use when quantizing: `x86`, `fbgemm`, `onednn` or `qnnpack`. Unset keeps torch's choice. Try another one if `ml-gw-cli check-quantization` dies with an illegal instruction. |
 | `ML_GATEWAY_DISABLED_ENDPOINTS` | unset | Comma-separated route paths to take out of service, as written in the endpoint tables (`/classify/attack-techniques`, `/retrieve/attack-biencoder/technique/{id}`, `/retrieve/attack-biencoder/related`, …). A call to a listed endpoint is refused with `503` before any model or the inference queue is involved, and without `Retry-After`. Useful to shed a whole feature under load. |
 | `ML_GATEWAY_INDEX_DIR` | `./index` | Directory of the on-disk retrieval index, one sub-directory per model. Relative to the working directory, so start the server and the CLI from the same place or set an absolute path for both. |
 | `HF_HUB_OFFLINE` | unset | Set to `1` to forbid Hugging Face Hub access; every model must then be cached first with `ml-gw-cli refresh-all`. |
@@ -184,6 +185,20 @@ Two lessons: int8 pays off with one or two threads per call, and fp32 gains
 nothing from a third and fourth thread on inputs this short. On a 16-core
 host that argues for more workers with fewer threads each, for example
 `-w 8` with `OMP_NUM_THREADS=2`, rather than the 4 × 4 layout above.
+**Check the host first.** The int8 kernels use vector instructions the CPU
+must support; on a machine (or a VM whose virtual CPU) without them every
+worker dies with `SIGILL` on its first quantized forward pass. Run the
+self-test on the host before enabling the variable:
+
+```bash
+poetry run ml-gw-cli check-quantization
+```
+
+It prints the engine and the CPU's vector flags, quantizes every classifier
+and runs one forward pass each. If it ends with `Illegal instruction`, try
+`ML_GATEWAY_QUANTIZE_ENGINE=fbgemm` (or `qnnpack`, slower but portable) and
+run it again; if none passes, leave quantization off on that host.
+
 Responses carry `quantized: true` so a prediction can be traced to the
 weights that produced it. Re-measure before enabling it for a new model
 revision: the accuracy cost is model dependent.
