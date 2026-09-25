@@ -41,3 +41,23 @@ def test_refresh_model_passes_the_revision(monkeypatch: pytest.MonkeyPatch) -> N
     result = CliRunner().invoke(cli.app, ["refresh-model", "--model-name", MODEL])
     assert result.exit_code == 0, result.output
     assert calls[-1] == (MODEL, None)
+
+
+def test_bench_reports_latency_without_a_real_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Stub:
+        revision = SHA
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def predict(self, description: str) -> dict[str, str]:
+            self.calls += 1
+            return {"severity": "Low"}
+
+    stub = Stub()
+    monkeypatch.setattr(cli, "get_model_instance", lambda model_name: stub)
+    result = CliRunner().invoke(cli.app, ["bench", "--iterations", "9", "--threads", "1"])
+    assert result.exit_code == 0, result.output
+    assert f"revision {SHA}" in result.output
+    assert "9 passes: mean" in result.output and "req/s" in result.output
+    assert stub.calls == 12  # three warm-up passes plus the timed ones

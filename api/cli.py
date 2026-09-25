@@ -77,6 +77,72 @@ def refresh_all():
     typer.echo("All models refreshed.")
 
 
+BENCH_DESCRIPTIONS = [
+    "Cross-site scripting in the admin panel of Foo CMS 2.1 allows remote attackers to inject script.",
+    (
+        "Zoho ManageEngine ServiceDesk Plus before 11306 is vulnerable to a privilege escalation issue where "
+        "an authenticated low-privileged user can modify the request to access administrative functions. "
+        "An attacker could exploit this to create new administrator accounts."
+    ),
+    (
+        "A heap-based buffer overflow in the TIFF image parser of libexample before 1.4.2, when processing a "
+        "crafted file with an oversized strip count, allows a remote attacker to execute arbitrary code or "
+        "cause a denial of service (application crash) via a specially crafted image embedded in a document. "
+        "The issue stems from a missing bounds check in tiff_read_strips() and affects all platforms; "
+        "exploitation requires the victim to open the file but no further interaction."
+    ),
+]
+
+
+@app.command()
+def bench(
+    model_name: str = typer.Option(
+        "CIRCL/vulnerability-severity-classification-RoBERTa-base",
+        help="Severity or attack-technique model to time.",
+    ),
+    iterations: int = typer.Option(60, min=3, help="Timed forward passes (after three warm-up passes)."),
+    threads: int | None = typer.Option(None, min=1, help="torch intra-op threads; default: torch's choice."),
+    mkldnn: bool = typer.Option(True, help="Use oneDNN kernels (--no-mkldnn tries torch's native ones)."),
+) -> None:
+    """
+    Time single forward passes of one classifier on this host, outside gunicorn.
+
+    Cycles through three built-in descriptions (short, typical, long) and
+    prints latency percentiles and requests per second for the current
+    thread count, so a slow host, a torch upgrade or a thread layout can be
+    compared without any client in the loop.
+    """
+    import statistics
+    import time
+
+    import torch
+
+    if threads is not None:
+        torch.set_num_threads(threads)
+    # The flag is a ContextProp descriptor in the stubs; setattr keeps mypy quiet.
+    setattr(torch.backends.mkldnn, "enabled", mkldnn)
+    classifier = get_model_instance(model_name) if model_name in LABELS else get_attack_model_instance(model_name)
+    typer.echo(
+        f"torch {torch.__version__}, {torch.get_num_threads()} threads, mkldnn={'on' if mkldnn else 'off'}, "
+        f"CPU flags: {' '.join(sorted(cpu_flags())) or 'unknown'}"
+    )
+    typer.echo(f"{model_name} revision {classifier.revision}")
+    for description in BENCH_DESCRIPTIONS:
+        classifier.predict(description)
+    latencies: list[float] = []
+    for i in range(iterations):
+        started = time.perf_counter()
+        classifier.predict(BENCH_DESCRIPTIONS[i % len(BENCH_DESCRIPTIONS)])
+        latencies.append(time.perf_counter() - started)
+    latencies.sort()
+    typer.echo(
+        f"{iterations} passes: mean {statistics.mean(latencies) * 1000:.0f} ms, "
+        f"p50 {latencies[len(latencies) // 2] * 1000:.0f} ms, "
+        f"p90 {latencies[int(len(latencies) * 0.9)] * 1000:.0f} ms, "
+        f"max {latencies[-1] * 1000:.0f} ms, {len(latencies) / sum(latencies):.2f} req/s"
+    )
+
+
 @app.command("check-quantization")
 def check_quantization() -> None:
     """

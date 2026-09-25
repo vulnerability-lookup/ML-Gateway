@@ -15,6 +15,9 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- `ml-gw-cli bench` times single forward passes of a classifier on the host
+  (thread count and oneDNN selectable), to compare hosts, torch versions and
+  thread layouts without gunicorn or a client in the loop.
 - `ML_GATEWAY_MODEL_REVISIONS` pins the revision each model is loaded from
   (`<model>=<commit sha>`, comma-separated), to revert or hold a revision;
   `ml-gw-cli refresh-model --revision <sha>` downloads one, and `refresh-all`

@@ -29,6 +29,9 @@ poetry run ml-gw-cli backfill-index --dumps /path/to/dumps/
 poetry run ml-gw-cli embed-dumps --dumps /path/to/dumps/ --output vectors.npz --device cuda  # on a GPU host
 poetry run ml-gw-cli import-index --file vectors.npz
 
+# Time single forward passes on this host (thread count and oneDNN selectable)
+poetry run ml-gw-cli bench --threads 4
+
 # Check that int8 quantization runs on this CPU before setting ML_GATEWAY_QUANTIZE=1
 poetry run ml-gw-cli check-quantization
 

@@ -111,6 +111,20 @@ Why these settings on 16 cores:
   the worker that took the connection (see `pid`), so poll it a few times
   and add the figures up. A low hit rate means the load is new text, which
   no cache can absorb; a high one means a shared cache would pay off.
+- To find out what one call costs on a host, independent of gunicorn and of
+  any client, time the model directly:
+
+  ```bash
+  HF_HUB_OFFLINE=1 poetry run ml-gw-cli bench --threads 4
+  HF_HUB_OFFLINE=1 poetry run ml-gw-cli bench --threads 2
+  HF_HUB_OFFLINE=1 poetry run ml-gw-cli bench --threads 1 --no-mkldnn
+  ```
+
+  It prints the torch version, the CPU's vector flags and latency
+  percentiles for a short, a typical and a long description. Multiply the
+  requests per second by the number of workers for the gateway's ceiling
+  at that thread count; if a torch upgrade or a new host changes the
+  figure, this is where it shows.
 - `HF_HUB_OFFLINE=1` forbids any Hugging Face Hub access, so the server never
   pulls model updates behind your back. See the next section.
 
