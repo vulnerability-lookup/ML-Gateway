@@ -138,6 +138,29 @@ model**, then start the server. Without the variable, transformers checks the
 Hub at every start and silently loads a newer revision if one was published;
 the `model_revision` field of every response tells you which one is served.
 
+### Pinning or reverting a model revision
+
+By default a model is served from the Hub's `main` at the time of the last
+`refresh-all`. To serve a specific revision instead, for instance to revert
+after a new one turns out worse, pin it in `ML_GATEWAY_MODEL_REVISIONS`
+(one `<model>=<commit sha>` per model, comma-separated), download that
+revision, and restart:
+
+```bash
+echo 'ML_GATEWAY_MODEL_REVISIONS=CIRCL/vulnerability-severity-classification-RoBERTa-base=987d2c3a2d521db0cda327e1bb77248c381f057c' >> ~/ML-Gateway/.env
+set -a; . ~/ML-Gateway/.env; set +a
+poetry run ml-gw-cli refresh-model \
+  --model-name CIRCL/vulnerability-severity-classification-RoBERTa-base \
+  --revision 987d2c3a2d521db0cda327e1bb77248c381f057c
+```
+
+`refresh-model --revision` downloads that snapshot; `refresh-all` downloads
+every pinned revision (and `main` for unpinned models), so the cache always
+matches what the server will load offline. The commit SHAs are listed on
+the model's Hub page under "Files and versions", and every response
+reports the one actually loaded as `model_revision`. Remove the entry and
+refresh again to follow `main` once more.
+
 ### Environment variables
 
 | Variable | Default | Purpose |
@@ -146,6 +169,7 @@ the `model_revision` field of every response tells you which one is served.
 | `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
 | `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
 | `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
+| `ML_GATEWAY_MODEL_REVISIONS` | unset | `<model>=<commit sha>` pairs, comma-separated: each listed model is loaded from that revision instead of the Hub's `main`, for a revert or a controlled upgrade. The CLI downloads pinned revisions; see [Pinning or reverting a model revision](#pinning-or-reverting-a-model-revision). |
 | `ML_GATEWAY_QUANTIZE` | unset | Set to `1` to run the severity and attack-technique classifiers with dynamic int8 weights (each worker converts its copy after the fork). Roughly doubles throughput on CPU for typical descriptions at a small accuracy cost; responses then carry `quantized: true`. The bi-encoder is never quantized. See [Quantization](#quantization). |
 | `ML_GATEWAY_QUANTIZE_ENGINE` | unset | Which int8 kernels to use when quantizing: `x86`, `fbgemm`, `onednn` or `qnnpack`. Unset keeps torch's choice. Try another one if `ml-gw-cli check-quantization` dies with an illegal instruction. |
 | `ML_GATEWAY_DISABLED_ENDPOINTS` | unset | Comma-separated route paths to take out of service, as written in the endpoint tables (`/classify/attack-techniques`, `/retrieve/attack-biencoder/technique/{id}`, `/retrieve/attack-biencoder/related`, …). A call to a listed endpoint is refused with `503` before any model or the inference queue is involved, and without `Retry-After`. Useful to shed a whole feature under load. |

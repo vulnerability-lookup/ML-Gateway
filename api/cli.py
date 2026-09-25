@@ -9,6 +9,7 @@ from api.backfill import BackfillReport, backfill, embed_dumps, import_vectors
 from api.models.attack_model import ATTACK_MODELS, get_attack_model_instance
 from api.models.biencoder_model import BIENCODER_MODELS, AttackBiEncoder, get_biencoder_instance
 from api.models.quantization import cpu_flags, select_engine
+from api.models.revisions import pinned_revision
 from api.models.severity_model import LABELS, get_model_instance
 from api.schemas import DEFAULT_BIENCODER_MODEL
 from api.services.retrieval_service import get_store
@@ -16,19 +17,25 @@ from api.services.retrieval_service import get_store
 app = typer.Typer(help="Utility CLI for managing NLP models.")
 
 
-def _refresh(model_name: str) -> None:
-    """Force-download one model's tokenizer, weights and companion files."""
-    typer.echo(f"Refreshing model: {model_name}")
+def _refresh(model_name: str, revision: str | None = None) -> None:
+    """Force-download one model's tokenizer, weights and companion files.
+
+    ``revision`` is a commit SHA (or branch/tag); ``None`` means the pin from
+    ``ML_GATEWAY_MODEL_REVISIONS`` if any, else the Hub's ``main``. The same
+    rule the server applies, so what gets cached is what gets served.
+    """
+    revision = revision or pinned_revision(model_name)
+    typer.echo(f"Refreshing model: {model_name} (revision {revision or 'main'})")
     try:
-        _ = AutoTokenizer.from_pretrained(model_name, force_download=True)
+        _ = AutoTokenizer.from_pretrained(model_name, revision=revision, force_download=True)
         if model_name in BIENCODER_MODELS:
             # A plain encoder, shipped with the technique texts it was
             # trained against; the server reads both from the cache.
-            _ = AutoModel.from_pretrained(model_name, force_download=True)
-            _ = hf_hub_download(model_name, "technique_texts.json", force_download=True)
+            _ = AutoModel.from_pretrained(model_name, revision=revision, force_download=True)
+            _ = hf_hub_download(model_name, "technique_texts.json", revision=revision, force_download=True)
         else:
             _ = AutoModelForSequenceClassification.from_pretrained(
-                model_name, force_download=True
+                model_name, revision=revision, force_download=True
             )
     except ValueError as e:
         if isinstance(e.__cause__, RepositoryNotFoundError):
@@ -41,19 +48,26 @@ def _refresh(model_name: str) -> None:
 def refresh_model(
     model_name: str = typer.Option(
         ..., help="The Hugging Face model identifier to refresh."
-    )
+    ),
+    revision: str | None = typer.Option(
+        None,
+        help=(
+            "Commit SHA (or branch/tag) to download instead of main. To serve it, pin the same value in "
+            "ML_GATEWAY_MODEL_REVISIONS before starting the server."
+        ),
+    ),
 ):
     """
     Force-refresh a specific model from Hugging Face.
     """
-    _refresh(model_name)
+    _refresh(model_name, revision)
     typer.echo("Model refresh complete.")
 
 
 @app.command()
 def refresh_all():
     """
-    Force-refresh all preconfigured models.
+    Force-refresh all preconfigured models (at their pinned revisions, if any).
     """
     typer.echo("Refreshing all preconfigured models…")
 

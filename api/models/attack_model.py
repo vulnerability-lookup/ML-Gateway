@@ -7,6 +7,7 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from api.models.quantization import quantize_linear_layers
+from api.models.revisions import pinned_revision
 from api.models.tokenizer_utils import clamp_tokenizer_max_length
 
 """
@@ -60,8 +61,11 @@ class AttackTechniqueClassifier:
 
     def __init__(self, model_name: str):
         self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        # ``None`` means the Hub's main; a pin (ML_GATEWAY_MODEL_REVISIONS)
+        # selects one snapshot, also from the offline cache.
+        revision = pinned_revision(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, revision=revision)
         self.model.eval()  # Disable dropout etc.
         clamp_tokenizer_max_length(self.tokenizer, self.model.config)
         # transformers stamps the resolved snapshot SHA onto

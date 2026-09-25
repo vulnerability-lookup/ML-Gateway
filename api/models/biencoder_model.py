@@ -9,6 +9,7 @@ from huggingface_hub import hf_hub_download
 from numpy.typing import NDArray
 from transformers import AutoModel, AutoTokenizer
 
+from api.models.revisions import pinned_revision
 from api.models.tokenizer_utils import clamp_tokenizer_max_length
 
 """
@@ -61,8 +62,11 @@ class AttackBiEncoder:
         """``device`` is a torch device string (``"cuda"``, ``"cpu"``); the
         server keeps the default CPU, the bulk embedding CLI may pass a GPU."""
         self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
+        # ``None`` means the Hub's main; a pin (ML_GATEWAY_MODEL_REVISIONS)
+        # selects one snapshot, also from the offline cache.
+        revision = pinned_revision(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision)
+        self.model = AutoModel.from_pretrained(model_name, revision=revision)
         if device is not None:
             self.model.to(device)
         self.device = next(self.model.parameters()).device

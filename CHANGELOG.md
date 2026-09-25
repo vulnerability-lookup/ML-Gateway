@@ -15,6 +15,10 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- `ML_GATEWAY_MODEL_REVISIONS` pins the revision each model is loaded from
+  (`<model>=<commit sha>`, comma-separated), to revert or hold a revision;
+  `ml-gw-cli refresh-model --revision <sha>` downloads one, and `refresh-all`
+  downloads the pinned revisions. Unpinned models follow `main` as before.
 - `ML_GATEWAY_QUANTIZE=1` runs the severity and attack-technique classifiers
   with dynamic int8 weights, converted in each worker after the fork; about
   twice the throughput at one or two threads per call, responses carry
