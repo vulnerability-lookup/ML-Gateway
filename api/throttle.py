@@ -48,6 +48,8 @@ class InferenceGate:
             refused with 503.
         running: Calls currently executing.
         waiting: Calls currently waiting for a slot.
+        served: Calls admitted and completed since the process started.
+        refused: Calls refused with 503 since the process started.
     """
 
     def __init__(self, concurrency: int, queue: int) -> None:
@@ -68,6 +70,8 @@ class InferenceGate:
         self.queue = queue
         self.running = 0
         self.waiting = 0
+        self.served = 0
+        self.refused = 0
         # Created on first use, inside the worker's event loop: the module
         # is imported in the gunicorn master before the fork.
         self._semaphore: asyncio.Semaphore | None = None
@@ -81,6 +85,7 @@ class InferenceGate:
         """Run ``fn`` in the threadpool once a slot is free, or refuse with 503."""
         slots = self._slots()
         if slots.locked() and self.waiting >= self.queue:
+            self.refused += 1
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=(
@@ -98,10 +103,12 @@ class InferenceGate:
             self.waiting -= 1
         self.running += 1
         try:
-            return await run_in_threadpool(fn, *args, **kwargs)
+            result = await run_in_threadpool(fn, *args, **kwargs)
         finally:
             self.running -= 1
             slots.release()
+        self.served += 1
+        return result
 
 
 INFERENCE_GATE = InferenceGate.from_env()

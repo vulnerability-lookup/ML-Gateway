@@ -188,7 +188,7 @@ _embed_cache: TTLCache = TTLCache(maxsize=10_000, ttl=3600)
 _embed_cache_lock = Lock()
 
 
-@cached(_embed_cache, lock=_embed_cache_lock)
+@cached(_embed_cache, lock=_embed_cache_lock, info=True)
 def _cached_embed(model_name: str, text: str) -> NDArray[np.float32]:
     return get_biencoder_instance(model_name).embed_vulnerabilities([text])[0]
 

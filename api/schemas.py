@@ -340,3 +340,31 @@ class TechniqueListResponse(BaseModel):
         default=None,
         description="Human-readable error message when the model could not be resolved.",
     )
+
+
+class CacheStats(BaseModel):
+    """Hit and miss counters of one in-process result cache."""
+
+    hits: int
+    misses: int
+    size: int
+    maxsize: int
+
+
+class InferenceStats(BaseModel):
+    """State and counters of the worker's inference gate."""
+
+    concurrency: int
+    queue: int
+    running: int
+    waiting: int
+    served: int
+    refused: int
+
+
+class StatsResponse(BaseModel):
+    """Per-worker counters; ``pid`` identifies the worker that answered."""
+
+    pid: int
+    caches: dict[str, CacheStats]
+    inference: InferenceStats

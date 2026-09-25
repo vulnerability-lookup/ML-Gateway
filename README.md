@@ -104,6 +104,13 @@ Why these settings on 16 cores:
 
   Under systemd, point `EnvironmentFile=` at that file; with docker compose,
   the same file next to `docker-compose.yml` is read automatically.
+- To see what the traffic is made of, add `--access-logfile -` (or a file
+  path) to the command: one line per request with the path and status, so
+  a count per minute gives the sustained rate and the share of `503`s.
+  `GET /stats` adds the cache hit rate and the gate counters; it answers for
+  the worker that took the connection (see `pid`), so poll it a few times
+  and add the figures up. A low hit rate means the load is new text, which
+  no cache can absorb; a high one means a shared cache would pay off.
 - `HF_HUB_OFFLINE=1` forbids any Hugging Face Hub access, so the server never
   pulls model updates behind your back. See the next section.
 
@@ -368,6 +375,9 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 
 | Endpoint | Field | Description |
 |---|---|---|
+| `GET /stats` | `pid` | The worker that answered; every figure below is for that worker only. |
+| | `caches.<name>` | `hits`, `misses`, `size`, `maxsize` of the `severity`, `attack_techniques` and `embeddings` result caches (per worker, one hour TTL). |
+| | `inference` | The gate's `concurrency` and `queue` limits, current `running` and `waiting`, and `served` / `refused` counts since the worker started. |
 | any endpoint listed in `ML_GATEWAY_DISABLED_ENDPOINTS` | `503`, no `Retry-After` | Disabled by the operator; the detail names the route. Lasts until the gateway restarts without the entry. |
 | every endpoint that runs a model | `503` + `Retry-After` | The worker's inference queue (`ML_GATEWAY_INFERENCE_QUEUE`) is full; retry after the given number of seconds. `GET /` and `GET /retrieve/attack-biencoder/techniques` are never refused. |
 | `POST /index/attack-biencoder` | `Authorization` | `Bearer <ML_GATEWAY_INDEX_TOKEN>`; `401` if wrong, `503` while the gateway has no token configured. |

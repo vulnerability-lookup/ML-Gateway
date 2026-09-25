@@ -28,7 +28,7 @@ _predict_cache: TTLCache = TTLCache(
 _predict_cache_lock = Lock()
 
 
-@cached(_predict_cache, lock=_predict_cache_lock)
+@cached(_predict_cache, lock=_predict_cache_lock, info=True)
 def _cached_predict(model_name: str, description: str) -> Prediction:
     return get_model_instance(model_name).predict(description)
 
@@ -74,7 +74,7 @@ _attack_predict_cache: TTLCache = TTLCache(
 _attack_predict_cache_lock = Lock()
 
 
-@cached(_attack_predict_cache, lock=_attack_predict_cache_lock)
+@cached(_attack_predict_cache, lock=_attack_predict_cache_lock, info=True)
 def _cached_predict_attack(
     model_name: str, description: str
 ) -> list[RankedTechnique]:

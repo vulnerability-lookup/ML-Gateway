@@ -15,6 +15,9 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- `GET /stats` reports, per worker, the hit and miss counts of the three
+  result caches and the inference gate's limits, occupancy and served /
+  refused counts, to tell repeated text from new work under load.
 - `ML_GATEWAY_DISABLED_ENDPOINTS` takes the listed endpoints out of service:
   a call is refused with `503` (no `Retry-After`) before any model runs, so
   an operator can shed a whole feature under load.

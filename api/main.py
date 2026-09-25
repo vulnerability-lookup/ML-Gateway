@@ -7,6 +7,7 @@ from api.models.biencoder_model import preload_models as preload_biencoder_model
 from api.models.severity_model import preload_models
 from api.routers.classification_router import router as classification_router
 from api.routers.retrieval_router import router as retrieval_router
+from api.routers.stats_router import router as stats_router
 
 # Load models at import time. Combined with gunicorn's ``--preload`` flag this
 # happens once in the master process, so forked workers share the weights via
@@ -35,3 +36,4 @@ app = FastAPI(lifespan=lifespan)
 # Include API routers
 app.include_router(classification_router)
 app.include_router(retrieval_router)
+app.include_router(stats_router)
