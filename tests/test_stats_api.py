@@ -35,7 +35,7 @@ def fresh_counters(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         retrieval_service._cached_embed,
     ):
         cached.cache_clear()
-    limits = (INFERENCE_GATE.concurrency, INFERENCE_GATE.queue)
+    limits = (INFERENCE_GATE.concurrency, INFERENCE_GATE.queue, INFERENCE_GATE.max_wait)
     INFERENCE_GATE.configure(*limits)
     yield
     INFERENCE_GATE.configure(*limits)
@@ -62,14 +62,19 @@ def test_stats_count_cache_hits_and_served_calls(client: TestClient) -> None:
     assert after["pid"] == before["pid"]
     assert after["caches"]["severity"] == {"hits": 2, "misses": 2, "size": 2, "maxsize": 10_000}
     assert set(after["caches"]) == {"severity", "attack_techniques", "embeddings"}
-    assert after["inference"] == {
+    inference = after["inference"]
+    assert inference.pop("service_time_ms") >= 0
+    assert inference == {
         "concurrency": INFERENCE_GATE.concurrency,
         "queue": INFERENCE_GATE.queue,
+        "max_wait_seconds": INFERENCE_GATE.max_wait,
+        "expected_wait_seconds": 0.0,
         "running": 0,
         "waiting": 0,
         "served": 4,
         "refused": 0,
     }
+    assert before["inference"]["service_time_ms"] is None
 
 
 def test_stats_count_refusals_and_never_queue(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

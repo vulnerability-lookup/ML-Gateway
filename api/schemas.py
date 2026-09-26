@@ -370,6 +370,9 @@ class InferenceStats(BaseModel):
 
     concurrency: int
     queue: int
+    max_wait_seconds: float
+    service_time_ms: float | None
+    expected_wait_seconds: float
     running: int
     waiting: int
     served: int

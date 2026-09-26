@@ -20,7 +20,7 @@ Tests for the inference gate: bounded concurrency and queue per worker,
 
 @pytest.fixture(autouse=True)
 def restore_gate() -> Iterator[None]:
-    limits = (INFERENCE_GATE.concurrency, INFERENCE_GATE.queue)
+    limits = (INFERENCE_GATE.concurrency, INFERENCE_GATE.queue, INFERENCE_GATE.max_wait)
     yield
     INFERENCE_GATE.configure(*limits)
 
@@ -58,7 +58,7 @@ def test_gate_refuses_when_queue_is_full() -> None:
     first, second, refused = asyncio.run(scenario())
     assert (first, second) == ("first", "second")
     assert refused.status_code == 503
-    assert refused.headers == {"Retry-After": str(throttle.RETRY_AFTER_SECONDS)}
+    assert refused.headers == {"Retry-After": "1"}
     assert "1 inference calls running and 1 queued" in refused.detail
     assert blocker.calls == 2
     assert (gate.running, gate.waiting) == (0, 0)
@@ -88,10 +88,55 @@ def test_gate_forgets_a_caller_that_gives_up_while_queued() -> None:
 def test_gate_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(throttle.CONCURRENCY_ENV, "3")
     monkeypatch.setenv(throttle.QUEUE_ENV, "7")
+    monkeypatch.setenv(throttle.MAX_WAIT_ENV, "2.5")
     gate = InferenceGate.from_env()
-    assert (gate.concurrency, gate.queue) == (3, 7)
+    assert (gate.concurrency, gate.queue, gate.max_wait) == (3, 7, 2.5)
     with pytest.raises(ValueError):
         InferenceGate(concurrency=0, queue=1)
+    with pytest.raises(ValueError):
+        InferenceGate(concurrency=1, queue=1, max_wait=0)
+
+
+def test_gate_refuses_on_the_wait_budget_not_the_count() -> None:
+    gate = InferenceGate(concurrency=1, queue=1000, max_wait=1.0)
+    blocker = Blocker()
+
+    async def scenario() -> tuple[str, HTTPException]:
+        first = asyncio.create_task(gate.run(blocker, "first"))
+        await asyncio.to_thread(blocker.started.wait, 5)
+        # Pretend three earlier calls are queued and each call takes 0.4 s:
+        # 1.2 s of work ahead exceeds the 1 s budget.
+        gate.service_time = 0.4
+        gate.waiting = 3
+        with pytest.raises(HTTPException) as refused:
+            await gate.run(blocker, "late")
+        gate.waiting = 0
+        # Two queued calls are 0.8 s of work: admitted.
+        gate.waiting = 2
+        assert gate.expected_wait() == pytest.approx(0.8)
+        gate.waiting = 0
+        blocker.release.set()
+        return await first, refused.value
+
+    first, refused = asyncio.run(scenario())
+    assert first == "first"
+    assert "about 1.2 s of work ahead (limit 1 s)" in refused.detail
+    assert refused.headers == {"Retry-After": "1"}
+    assert gate.service_time == pytest.approx(0.4, abs=0.2)  # the first call's duration was folded in
+    assert gate.refused == 1
+
+
+def test_service_time_is_a_running_average() -> None:
+    gate = InferenceGate(concurrency=2, queue=10, max_wait=5.0)
+    assert gate.expected_wait() == 0.0
+    gate.observe(1.0)
+    assert gate.service_time == 1.0
+    gate.observe(0.0)
+    assert gate.service_time == pytest.approx(0.8)
+    gate.waiting = 4
+    assert gate.expected_wait() == pytest.approx(1.6)  # 4 calls, 0.8 s each, 2 at a time
+    gate.service_time = 2.4
+    assert gate.retry_after() == 3
 
 
 class StubSeverityClassifier:
@@ -132,7 +177,7 @@ def test_endpoint_sheds_load_and_recovers(classifier: StubSeverityClassifier) ->
 
         refused = client.post("/classify/severity", json={"description": "second"})
         assert refused.status_code == 503
-        assert refused.headers["Retry-After"] == str(throttle.RETRY_AFTER_SECONDS)
+        assert refused.headers["Retry-After"] == "1"
         assert refused.json()["detail"].startswith("Overloaded: 1 inference calls running and 0 queued")
         # The root never touches the gate.
         assert client.get("/").status_code == 200

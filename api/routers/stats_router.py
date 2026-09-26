@@ -50,6 +50,9 @@ async def stats_endpoint() -> StatsResponse:
         inference=InferenceStats(
             concurrency=INFERENCE_GATE.concurrency,
             queue=INFERENCE_GATE.queue,
+            max_wait_seconds=INFERENCE_GATE.max_wait,
+            service_time_ms=None if INFERENCE_GATE.service_time is None else INFERENCE_GATE.service_time * 1000,
+            expected_wait_seconds=INFERENCE_GATE.expected_wait(),
             running=INFERENCE_GATE.running,
             waiting=INFERENCE_GATE.waiting,
             served=INFERENCE_GATE.served,

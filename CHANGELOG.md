@@ -15,6 +15,12 @@ inference endpoints.
   queued requests, 184 threads and four saturated cores per worker).
 - `GET /retrieve/attack-biencoder/techniques` and `GET /` run no model and
   answer even while the queue is full.
+- The inference gate refuses on a wait budget instead of a count:
+  `ML_GATEWAY_INFERENCE_MAX_WAIT` (default 8 s) is the queued work, at the
+  worker's own measured time per call, beyond which a call gets `503`.
+  `ML_GATEWAY_INFERENCE_QUEUE` (now 256) remains a hard cap. `Retry-After`
+  and the refusal message report the measured figures; `GET /stats` adds
+  `service_time_ms`, `expected_wait_seconds` and `max_wait_seconds`.
 - `ml-gw-cli bench` times single forward passes of a classifier on the host
   (thread count and oneDNN selectable), to compare hosts, torch versions and
   thread layouts without gunicorn or a client in the loop.

@@ -76,14 +76,16 @@ Why these settings on 16 cores:
   `--proxy-protocol` preserves client IPs when fronted by a PROXY-protocol
   aware load balancer.
 - Every endpoint that runs a model goes through a per-worker gate: at most
-  `ML_GATEWAY_INFERENCE_CONCURRENCY` (default 1) calls run at once and at most
-  `ML_GATEWAY_INFERENCE_QUEUE` (default 32) wait for a slot; the next call is
-  refused immediately with `503` and a `Retry-After` header. With the defaults
-  a request waits a few seconds at most, and a client that overruns the
-  gateway (a bulk re-enrichment, say) sees `503`s to back off on instead of
-  a server that stops answering while its cores burn through an unbounded
-  backlog. Size the queue for the latency you can accept: roughly
-  `queue × 0.5 s` per worker for full-length descriptions.
+  `ML_GATEWAY_INFERENCE_CONCURRENCY` (default 1) calls run at once, and a new
+  call is refused immediately with `503` and a `Retry-After` header once the
+  calls already waiting would take more than `ML_GATEWAY_INFERENCE_MAX_WAIT`
+  seconds (default 8) to drain, judged from the worker's own recent time per
+  call. So an admitted call waits at most about that long, whatever the host's
+  speed, and a client that overruns the gateway sees `503`s to back off on
+  instead of a server that stops answering while its cores burn through an
+  unbounded backlog. Set the budget under the caller's timeout;
+  `GET /stats` shows the measured time per call and the current expected
+  wait.
 - `ML_GATEWAY_INDEX_TOKEN` is the shared secret the index endpoint requires.
   Any long random string works; generate one once and give the same value to
   Vulnerability-Lookup as `ML_GATEWAY_TOKEN`:
@@ -182,7 +184,8 @@ refresh again to follow `main` once more.
 | `ML_GATEWAY_INDEX_TOKEN` | unset | Shared secret for `POST /index/attack-biencoder`, sent by the client as `Authorization: Bearer <token>`. While unset the endpoint refuses every call with `503`; a wrong or missing token gets `401`. The read endpoints never require it. Give the same value to Vulnerability-Lookup as `ML_GATEWAY_TOKEN`. |
 | `ML_GATEWAY_INDEX_MAX_ITEMS` | `5000000` | Ceiling on the number of distinct IDs the index endpoint may grow the index to (about 1.5 KB each). A call that would exceed it is refused with `507`; updating an already indexed ID is always allowed. The CLI commands are not subject to it. |
 | `ML_GATEWAY_INFERENCE_CONCURRENCY` | `1` | Inference calls one worker runs at the same time. Each call uses `OMP_NUM_THREADS` cores, so `1` with `-w` workers on `-w × OMP_NUM_THREADS` cores keeps every core busy without oversubscribing them. |
-| `ML_GATEWAY_INFERENCE_QUEUE` | `32` | Inference calls one worker lets wait for a free slot. Beyond that a call is refused at once with `503` and `Retry-After: 1`, so a client that sends faster than the gateway can serve gets a back-pressure signal instead of an ever longer wait. `GET /` and the technique list run no model and always answer. |
+| `ML_GATEWAY_INFERENCE_MAX_WAIT` | `8` | Seconds of queued work a worker accepts before refusing. A call is refused at once with `503` and `Retry-After` when the calls already waiting, at the worker's own recent time per call, would take longer than this to drain. Keep it under the caller's timeout (Vulnerability-Lookup's proxy waits 10 s) so an admitted call is an answered call. `GET /` and the technique list run no model and always answer. |
+| `ML_GATEWAY_INFERENCE_QUEUE` | `256` | Hard cap on the calls one worker lets wait, whatever the wait budget says; matters only before the worker has measured its time per call. |
 | `ML_GATEWAY_MODEL_REVISIONS` | unset | `<model>=<commit sha>` pairs, comma-separated: each listed model is loaded from that revision instead of the Hub's `main`, for a revert or a controlled upgrade. The CLI downloads pinned revisions; see [Pinning or reverting a model revision](#pinning-or-reverting-a-model-revision). |
 | `ML_GATEWAY_QUANTIZE` | unset | Set to `1` to run the severity and attack-technique classifiers with dynamic int8 weights (each worker converts its copy after the fork). Roughly doubles throughput on CPU for typical descriptions at a small accuracy cost; responses then carry `quantized: true`. The bi-encoder is never quantized. See [Quantization](#quantization). |
 | `ML_GATEWAY_QUANTIZE_ENGINE` | unset | Which int8 kernels to use when quantizing: `x86`, `fbgemm`, `onednn` or `qnnpack`. Unset keeps torch's choice. Try another one if `ml-gw-cli check-quantization` dies with an illegal instruction. |
@@ -468,7 +471,7 @@ curl -X 'POST' 'http://127.0.0.1:8000/retrieve/attack-biencoder/related' \
 |---|---|---|
 | `GET /stats` | `pid` | The worker that answered; every figure below is for that worker only. |
 | | `caches.<name>` | `hits`, `misses`, `size`, `maxsize` of the `severity`, `attack_techniques` and `embeddings` result caches (per worker, one hour TTL). |
-| | `inference` | The gate's `concurrency` and `queue` limits, current `running` and `waiting`, and `served` / `refused` counts since the worker started. |
+| | `inference` | The gate's `concurrency`, `queue` and `max_wait_seconds` limits, the measured `service_time_ms` per call and the `expected_wait_seconds` a new call would face, current `running` and `waiting`, and `served` / `refused` counts since the worker started. |
 | any endpoint listed in `ML_GATEWAY_DISABLED_ENDPOINTS` | `503`, no `Retry-After` | Disabled by the operator; the detail names the route. Lasts until the gateway restarts without the entry. |
 | every endpoint that runs a model | `503` + `Retry-After` | The worker's inference queue (`ML_GATEWAY_INFERENCE_QUEUE`) is full; retry after the given number of seconds. `GET /` and `GET /retrieve/attack-biencoder/techniques` are never refused. |
 | `POST /index/attack-biencoder` | `Authorization` | `Bearer <ML_GATEWAY_INDEX_TOKEN>`; `401` if wrong, `503` while the gateway has no token configured. |
